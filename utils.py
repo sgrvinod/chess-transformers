@@ -41,7 +41,7 @@ def parse_pgn_file(
         # Read, extract, parse games
         games = read_pgn_file(pgn_file_path)
         input_and_output_sequences = list()
-        for game in games:
+        for game in tqdm(games, desc="Parsing this file"):
             input_and_output_sequences.extend(
                 get_input_and_output_sequences(
                     game,
