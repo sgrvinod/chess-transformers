@@ -207,4 +207,4 @@ def get_input_and_output_sequences(
                 }
             )
 
-    return input_and_output_sequences, winner
+    return input_and_output_sequences
