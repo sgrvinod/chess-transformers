@@ -208,14 +208,3 @@ def get_input_and_output_sequences(
             )
 
     return input_and_output_sequences, winner
-
-
-if __name__ == "__main__":
-    games = parse_pgn_data("/media/sgr/SSD/lichess data/")
-    games = read_pgn_file("/media/sgr/SSD/lichess data/lichess_elite_2013-11.pgn")
-
-    game = games[1]
-    view_game(game)
-    sequences, winner = get_input_and_output_sequences(
-        game, max_output_sequence_length=7, output_sequence_notation="lan"
-    )
