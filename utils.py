@@ -4,25 +4,14 @@ import chess
 import json
 import os
 from tqdm import tqdm
-from multiprocessing import Pool
+from collections import Counter
+import tables as tb
 
 random.seed(1234)
 
 
-def parse_pgn_data(pgn_data_path):
-
-    # Get names of PGN files
-    pgn_files = [f for f in os.listdir(pgn_data_path) if f.endswith(".pgn")]
-    print("There are %d PGN files to parse." % len(pgn_files))
-
-    for pgn_file in sorted(pgn_files):
-
-        pgn_file_path = os.path.join(pgn_data_path, pgn_file)
-        parse_pgn_file(pgn_file_path)
-
-
-def parse_pgn_file(
-    pgn_file_path, max_output_sequence_length=7, output_sequence_notation="lan"
+def parse_pgn_data(
+    pgn_data_path, max_output_sequence_length=10, output_sequence_notation="uci"
 ):
 
     # Check output sequence notation
@@ -33,11 +22,43 @@ def parse_pgn_file(
         "uci",
     ], "Output sequences must be in LAN, SAN, or UCI notations!"
 
-    # Path of output JSON file
-    parsed_json_file_path = pgn_file_path.replace(".pgn", ".json")
+    # Create table description for HDF5 file
+    class ChessTable(tb.IsDescription):
+        board_position = tb.StringCol(64)
+        turn = tb.StringCol(1)
+        white_kingside_castling_rights = tb.BoolCol()
+        white_queenside_castling_rights = tb.BoolCol()
+        black_kingside_castling_rights = tb.BoolCol()
+        black_queenside_castling_rights = tb.BoolCol()
+        can_claim_draw = tb.BoolCol()
 
-    # Only proceed if this PGN file hasn't already been parsed
-    if not os.path.exists(parsed_json_file_path):
+    # Add table columns for output sequence
+    for i in range(max_output_sequence_length):
+        ChessTable.columns["output_sequence_" + str(i)] = tb.StringCol(8)
+
+    # Delete HDF5 file if it already exists; start anew
+    if os.path.exists(os.path.join(pgn_data_path, "data.h5")):
+        os.remove(os.path.join(pgn_data_path, "data.h5"))
+
+    # Create new HDF5 file
+    h5file = tb.open_file(
+        os.path.join(pgn_data_path, "data.h5"), mode="w", title="data file"
+    )
+
+    # Create table in HDF5 file
+    table = h5file.create_table("/", "data", ChessTable, expectedrows=15000000)
+
+    # Create pointer to next row in this table
+    row = table.row
+
+    # Get names of PGN files
+    pgn_files = [f for f in os.listdir(pgn_data_path) if f.endswith(".pgn")]
+    print("There are %d PGN files to parse." % len(pgn_files))
+
+    # Parse PGN files
+    for pgn_file in sorted(pgn_files):
+        pgn_file_path = os.path.join(pgn_data_path, pgn_file)
+
         # Read, extract, parse games
         games = read_pgn_file(pgn_file_path)
         input_and_output_sequences = list()
@@ -49,17 +70,37 @@ def parse_pgn_file(
                     output_sequence_notation=output_sequence_notation,
                 )
             )
+        del games
 
-        # Save to a JSON file
-        with open(parsed_json_file_path, "w") as j:
-            json.dump(input_and_output_sequences, j, indent=4)
-        print(
-            "%d games were parsed from %s, and saved to %s"
-            % (len(games), pgn_file_path, parsed_json_file_path)
-        )
+        # Write parsed datapoints to the HDF5 file
+        for datapoint in input_and_output_sequences:
+            row["board_position"] = datapoint["input_sequence"]["board_position"]
+            row["turn"] = datapoint["input_sequence"]["turn"]
+            row["white_kingside_castling_rights"] = datapoint["input_sequence"][
+                "castling_rights"
+            ]["white_kingside"]
+            row["white_queenside_castling_rights"] = datapoint["input_sequence"][
+                "castling_rights"
+            ]["white_queenside"]
+            row["black_kingside_castling_rights"] = datapoint["input_sequence"][
+                "castling_rights"
+            ]["black_kingside"]
+            row["black_queenside_castling_rights"] = datapoint["input_sequence"][
+                "castling_rights"
+            ]["black_queenside"]
+            row["can_claim_draw"] = datapoint["input_sequence"]["can_claim_draw"]
+            for i in range(max_output_sequence_length):
+                try:
+                    row["output_sequence_" + str(i)] = datapoint["output_sequence"][i]
+                except IndexError:  # when approaching the end of the game
+                    break
+            row.append()
+        table.flush()
+        print("A total of %d datapoints have been saved to disk." % table.nrows)
+        del input_and_output_sequences
 
-    else:
-        print("Skipping %s - already parsed" % pgn_file_path)
+    h5file.close()
+    print("Done.")
 
 
 def read_pgn_file(pgn_file_path):
@@ -120,7 +161,7 @@ def get_board_status(board):
         "castling_rights": {
             "white_kingside": white_can_castle_kingside,
             "white_queenside": white_can_castle_queenside,
-            "black_kingslide": black_can_castle_kingside,
+            "black_kingside": black_can_castle_kingside,
             "black_queenside": black_can_castle_queenside,
         },
         "can_claim_draw": can_claim_draw,
@@ -130,7 +171,7 @@ def get_board_status(board):
 
 
 def get_input_and_output_sequences(
-    game, max_output_sequence_length, output_sequence_notation
+    game, max_output_sequence_length=10, output_sequence_notation="uci"
 ):
 
     # Check output sequence notation
@@ -152,11 +193,17 @@ def get_input_and_output_sequences(
 
         # Get this move in the desired output sequence notation
         if output_sequence_notation == "uci":
-            all_moves.append(board.uci(move))
+            all_moves.append(
+                board.uci(move).replace("+", "").replace("#", "").replace("x", "")
+            )
         elif output_sequence_notation == "lan":
-            all_moves.append(board.lan(move))
+            all_moves.append(
+                board.lan(move).replace("+", "").replace("#", "").replace("x", "")
+            )
         elif output_sequence_notation == "san":
-            all_moves.append(board.san(move))
+            all_moves.append(
+                board.san(move).replace("+", "").replace("#", "").replace("x", "")
+            )
         else:
             raise NotImplementedError
 
@@ -165,7 +212,7 @@ def get_input_and_output_sequences(
 
     # If game ended in checkmate, denote the loss as a "move" by the losing player
     # This is to condition the network to recognize the checkmate and to end the sequence with this move (like an "end generation" token)
-    if "#" in all_moves[-1]:
+    if board.is_checkmate():
         all_moves.append("<loss>")
         board_status_before_moves.append(
             get_board_status(board)
@@ -208,3 +255,35 @@ def get_input_and_output_sequences(
             )
 
     return input_and_output_sequences
+
+
+def build_vocabulary(data_folder, h5_file, vocabulary_file):
+    # Open table in H5 file
+    h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="r")
+    table = h5_file.root.data
+
+    # Get columns containing output sequences
+    output_columns = list()
+    for column in table.colnames:
+        if column.startswith("output_sequence_"):
+            output_columns.append(column)
+
+    # Create move vocabulary (with indices in order of most to least common moves)
+    move_count = Counter()
+    for i in tqdm(range(table.nrows), "Accumulating moves"):
+        move_count.update(list(table[i][output_columns]))
+    del move_count[b""]  # empty columns when game has ended
+    vocabulary = dict()
+    for i, move in enumerate(dict(move_count.most_common()).keys()):
+        vocabulary[move.decode()] = i  # moves are bytestrings, not unicode
+
+    print(
+        "There are %d moves in the vocabulary, not including loss or draw declarations. Mathematically, there are only 1968 possible UCI moves."
+        % (len(vocabulary) - 2)
+    )
+
+    # Save vocabulary to file
+    with open(os.path.join(data_folder, vocabulary_file), "w") as j:
+        json.dump(vocabulary, j, indent=4)
+
+    print("\nSaved to file.\n")
