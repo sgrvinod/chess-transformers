@@ -262,24 +262,44 @@ def build_vocabulary(data_folder, h5_file, vocabulary_file):
     h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="r")
     table = h5_file.root.data
 
-    # Get columns containing output sequences
+    # Get columns containing output (move) sequences
     output_columns = list()
     for column in table.colnames:
         if column.startswith("output_sequence_"):
             output_columns.append(column)
 
-    # Create move vocabulary (with indices in order of most to least common moves)
+    # Create move, board position, turn vocabularies (with indices in order of most to least common moves)
+    # For moves, an empty string ("") indicates a "no move" after a draw or loss is declared
     move_count = Counter()
+    board_position_count = Counter()
+    turn_count = Counter()
     for i in tqdm(range(table.nrows), "Accumulating moves"):
         move_count.update(list(table[i][output_columns]))
-    del move_count[b""]  # empty columns when game has ended
-    vocabulary = dict()
+        board_position_count.update(
+            list(table[i]["board_position"].decode())
+        )  # strings are bytestrings in H5 files, not unicode
+        turn_count.update([table[i]["turn"]])
+
+    vocabulary = {
+        "output_sequence": {},
+        "board_position": {},
+        "turn": {},
+        "white_kingside_castling_rights": {False: 0, True: 1},
+        "white_queenside_castling_rights": {False: 0, True: 1},
+        "black_kingside_castling_rights": {False: 0, True: 1},
+        "black_queenside_castling_rights": {False: 0, True: 1},
+        "can_claim_draw": {False: 0, True: 1},
+    }
     for i, move in enumerate(dict(move_count.most_common()).keys()):
-        vocabulary[move.decode()] = i  # moves are bytestrings, not unicode
+        vocabulary["output_sequence"][move.decode()] = i
+    for i, board_position in enumerate(dict(board_position_count.most_common()).keys()):
+        vocabulary["board_position"][board_position] = i
+    for i, turn in enumerate(dict(turn_count.most_common()).keys()):
+        vocabulary["turn"][turn.decode()] = i
 
     print(
         "There are %d moves in the vocabulary, not including loss or draw declarations. Mathematically, there are only 1968 possible UCI moves."
-        % (len(vocabulary) - 2)
+        % (len(vocabulary["output_sequence"]) - 3)
     )
 
     # Save vocabulary to file
@@ -287,3 +307,6 @@ def build_vocabulary(data_folder, h5_file, vocabulary_file):
         json.dump(vocabulary, j, indent=4)
 
     print("\nSaved to file.\n")
+
+    # Close H5 file
+    h5_file.close()
