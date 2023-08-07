@@ -899,7 +899,7 @@ class ChessTransformer(nn.Module):
         )  # (N, BOARD_STATUS_LENGTH, d_model)
 
         # Decoder
-        moves = self.decoder(
+        moves = self.move_decoder(
             moves, lengths, boards
         )  # (N, max_move_sequence_length, vocab_size)
 

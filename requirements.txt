@@ -1,0 +1,5 @@
+chess==1.9.4
+numpy==1.21.5
+tables==3.6.1
+torch==2.0.1
+tqdm==4.64.1

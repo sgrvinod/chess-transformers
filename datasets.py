@@ -36,28 +36,28 @@ class ChessDataset(Dataset):
         turn = torch.IntTensor([self.encoded_table[self.indices[i]]["turn"]])
         white_kingside_castling_rights = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["white_kingside_castling_rights"]]
-        )
+        )  # (1)
         white_queenside_castling_rights = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["white_queenside_castling_rights"]]
-        )
+        )  # (1)
         black_kingside_castling_rights = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["black_kingside_castling_rights"]]
-        )
+        )  # (1)
         black_queenside_castling_rights = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["black_queenside_castling_rights"]]
-        )
+        )  # (1)
         can_claim_draw = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["can_claim_draw"]]
-        )
+        )  # (1)
         board_position = torch.IntTensor(
             self.encoded_table[self.indices[i]]["board_position"]
-        )
+        )  # (64)
         output_sequence = torch.IntTensor(
             self.encoded_table[self.indices[i]]["output_sequence"]
-        )
+        )  # (o)
         output_sequence_length = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["output_sequence_length"]]
-        )
+        )  # (1), value <= o - 1
 
         return (
             turn,
