@@ -55,6 +55,9 @@ class ChessDataset(Dataset):
         output_sequence = torch.IntTensor(
             self.encoded_table[self.indices[i]]["output_sequence"]
         )
+        output_sequence_length = torch.IntTensor(
+            [self.encoded_table[self.indices[i]]["output_sequence_length"]]
+        )
 
         return (
             turn,
@@ -65,6 +68,7 @@ class ChessDataset(Dataset):
             can_claim_draw,
             board_position,
             output_sequence,
+            output_sequence_length,
         )
 
     def __len__(self):
@@ -80,3 +84,7 @@ if __name__ == "__main__":
     )
     print(len(dataset))
     print(dataset[17])
+    dataloader = DataLoader(dataset, batch_size=5)
+    for d in dataloader:
+        print(d)
+        break

@@ -37,6 +37,7 @@ def encode_data(data_folder, h5_file, vocabulary_file):
         black_queenside_castling_rights = tb.Int8Col()
         can_claim_draw = tb.Int8Col()
         output_sequence = tb.Int16Col(shape=(table[0]["output_sequence"].shape[0] + 1))
+        output_sequence_length = tb.Int8Col()
 
     # Create table in encoded HDF5 file
     encoded_table = h5_file.create_table(
@@ -74,6 +75,9 @@ def encode_data(data_folder, h5_file, vocabulary_file):
         row["output_sequence"] = encode(
             [b"<move>"] + table[i]["output_sequence"].tolist(),
             vocabulary=vocabulary["output_sequence"],
+        )
+        row["output_sequence_length"] = len(
+            [o for o in table[i]["output_sequence"].tolist() if o != b"<pad>"]
         )
         row.append()
     encoded_table.flush()
