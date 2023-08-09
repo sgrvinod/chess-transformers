@@ -16,7 +16,8 @@ def view_game(game):
 
 def get_lr(step, d_model, warmup_steps):
     """
-    The LR schedule. This version below is twice the definition in the paper, as used in the official T2T repository.
+    The LR schedule. This version below is twice the definition in the
+    paper, as used in the official T2T repository.
 
     Args:
 
@@ -24,7 +25,9 @@ def get_lr(step, d_model, warmup_steps):
 
         d_model (int): size of vectors throughout the transformer model
 
-        warmup_steps (int): number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official T2T repo
+        warmup_steps (int): number of warmup steps where learning rate
+        is increased linearly; twice the value in the paper, as in the
+        official T2T repo
 
     Returns:
 
@@ -51,15 +54,17 @@ def save_checkpoint(epoch, model, optimizer, prefix=""):
 
         optimizer (torch.optim.adam.Adam): optimizer
 
-        prefix (str, optional): checkpoint filename prefix. Defaults to "".
+        prefix (str, optional): checkpoint filename prefix. Defaults to
+        "".
     """
     state = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
     }
-    filename = prefix + "transformer_checkpoint.pth.tar"
+    filename = prefix + "transformer_checkpoint.pt"
     torch.save(state, filename)
+    print("Checkpoint saved.\n")
 
 
 def change_lr(optimizer, new_lr):
@@ -68,7 +73,8 @@ def change_lr(optimizer, new_lr):
 
     Args:
 
-        optimizer (torch.optim.adam.Adam): optimizer whose learning rate must be changed
+        optimizer (torch.optim.adam.Adam): optimizer whose learning rate
+        must be changed
 
         new_lr (float): new learning rate
     """

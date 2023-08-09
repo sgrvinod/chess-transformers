@@ -83,7 +83,8 @@ class MultiHeadAttention(nn.Module):
             d_model)
 
             key_value_sequence_lengths (torch.LongTensor): true lengths
-            of the key_value_sequences, to be able to ignore pads, of size (N)
+            of the key_value_sequences, to be able to ignore pads, of
+            size (N)
 
         Returns:
 
@@ -460,21 +461,28 @@ class BoardEncoder(nn.Module):
 
             turns (torch.LongTensor): current turn (w/b), of size (N, 1)
 
-            white_kingside_castling_rights (torch.LongTensor): whether white can castle kingside, of size (N, 1)
+            white_kingside_castling_rights (torch.LongTensor): whether
+            white can castle kingside, of size (N, 1)
 
-            white_queenside_castling_rights (torch.LongTensor): whether white can castle queenside, of size (N, 1)
+            white_queenside_castling_rights (torch.LongTensor): whether
+            white can castle queenside, of size (N, 1)
 
-            black_kingside_castling_rights (torch.LongTensor): whether black can castle kingside, of size (N, 1)
+            black_kingside_castling_rights (torch.LongTensor): whether
+            black can castle kingside, of size (N, 1)
 
-            black_queenside_castling_rights (torch.LongTensor): whether black can castle queenside, of size (N, 1)
+            black_queenside_castling_rights (torch.LongTensor): whether
+            black can castle queenside, of size (N, 1)
 
-            can_claim_draw (torch.LongTensor): whether a draw can be claimed in the next move, of size (N, 1)
+            can_claim_draw (torch.LongTensor): whether a draw can be
+            claimed in the next move, of size (N, 1)
 
-            board_positions (torch.LongTensor): current board positions, of size (N, 64)
+            board_positions (torch.LongTensor): current board positions,
+            of size (N, 64)
 
         Returns:
 
-            torch.FloatTensor: encoded board, of size (N, BOARD_STATUS_LENGTH, d_model)
+            torch.FloatTensor: encoded board, of size (N,
+            BOARD_STATUS_LENGTH, d_model)
         """
         batch_size = turns.size(0)  # N
 
@@ -517,9 +525,8 @@ class BoardEncoder(nn.Module):
             boards = encoder_layer[0](
                 query_sequences=boards,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=torch.LongTensor(
-                    [BOARD_STATUS_LENGTH] * batch_size
-                ).to(DEVICE),
+                key_value_sequence_lengths=BOARD_STATUS_LENGTH
+                * torch.ones(batch_size).long().to(DEVICE),
             )  # (N, BOARD_STATUS_LENGTH, d_model)
             boards = encoder_layer[1](
                 sequences=boards
@@ -555,7 +562,8 @@ class MoveDecoder(nn.Module):
 
             vocab_size (int): size of the output vocabulary
 
-            max_move_sequence_length (int): expected maximum length of output (move) sequences
+            max_move_sequence_length (int): expected maximum length of
+            output (move) sequences
 
             d_model (int): size of vectors throughout the transformer
             model, i.e. input and output sizes for the Decoder
@@ -651,15 +659,19 @@ class MoveDecoder(nn.Module):
 
         Args:
 
-            moves (torch.LongTensor): move sequences, of size (N, move_sequence_length)
+            moves (torch.LongTensor): move sequences, of size (N,
+            move_sequence_length)
 
-            lengths (torch.LongTensor): true lengths of move sequences, not including <move> and <pad> tokens, of size (N, 1)
+            lengths (torch.LongTensor): true lengths of move sequences,
+            not including <move> and <pad> tokens, of size (N, 1)
 
-            boards (torch.FloatTensor): encoded boards, from the Encoder, of size (N, BOARD_STATUS_LENGTH, d_model)
+            boards (torch.FloatTensor): encoded boards, from the
+            Encoder, of size (N, BOARD_STATUS_LENGTH, d_model)
 
         Returns:
 
-            torch.FloatTensor: decoded next-move probabilities, of size (N, move_sequence_length, vocab_size)
+            torch.FloatTensor: decoded next-move probabilities, of size
+            (N, move_sequence_length, vocab_size)
         """
         batch_size = boards.size(0)  # N
 
@@ -727,12 +739,15 @@ class ChessTransformer(nn.Module):
 
         Args:
 
-            vocab_sizes (dict): sizes of the vocabularies of the Encoder sequence components and the Decoder (move) sequence
+            vocab_sizes (dict): sizes of the vocabularies of the Encoder
+            sequence components and the Decoder (move) sequence
 
-            max_move_sequence_length (int): expected maximum length of output (move) sequences
+            max_move_sequence_length (int): expected maximum length of
+            output (move) sequences
 
             d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for the Encoder and Decoder
+            model, i.e. input and output sizes for the Encoder and
+            Decoder
 
             n_heads (int): number of heads in the multi-head attention
 
@@ -745,7 +760,8 @@ class ChessTransformer(nn.Module):
             d_inner (int): an intermediate size in the position-wise FC
 
             n_layers (int): number of [multi-head attention + multi-head
-            attention + position-wise FC] layers in the Encoder and Decoder
+            attention + position-wise FC] layers in the Encoder and
+            Decoder
 
             dropout (int): dropout probability
         """
@@ -800,7 +816,8 @@ class ChessTransformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p, gain=1.0)
 
-        # For the embeddings, normal initialization with 0 mean and 1/sqrt(d_model) S.D.
+        # For the embeddings, normal initialization with 0 mean and
+        # 1/sqrt(d_model) S.D.
         nn.init.normal_(
             self.board_encoder.board_position_embeddings.weight,
             mean=0.0,
@@ -838,7 +855,8 @@ class ChessTransformer(nn.Module):
         )
         # TODO: figure out positional embeddings' initialization
 
-        # Share weights between the embedding layer in the Decoder and the logit layer
+        # Share weights between the embedding layer in the Decoder and
+        # the logit layer
         nn.init.normal_(
             self.move_decoder.embeddings.weight,
             mean=0.0,
@@ -867,25 +885,34 @@ class ChessTransformer(nn.Module):
 
             turns (torch.LongTensor): current turn (w/b), of size (N, 1)
 
-            white_kingside_castling_rights (torch.LongTensor): whether white can castle kingside, of size (N, 1)
+            white_kingside_castling_rights (torch.LongTensor): whether
+            white can castle kingside, of size (N, 1)
 
-            white_queenside_castling_rights (torch.LongTensor): whether white can castle queenside, of size (N, 1)
+            white_queenside_castling_rights (torch.LongTensor): whether
+            white can castle queenside, of size (N, 1)
 
-            black_kingside_castling_rights (torch.LongTensor): whether black can castle kingside, of size (N, 1)
+            black_kingside_castling_rights (torch.LongTensor): whether
+            black can castle kingside, of size (N, 1)
 
-            black_queenside_castling_rights (torch.LongTensor): whether black can castle queenside, of size (N, 1)
+            black_queenside_castling_rights (torch.LongTensor): whether
+            black can castle queenside, of size (N, 1)
 
-            can_claim_draw (torch.LongTensor): whether a draw can be claimed in the next move, of size (N, 1)
+            can_claim_draw (torch.LongTensor): whether a draw can be
+            claimed in the next move, of size (N, 1)
 
-            board_positions (torch.LongTensor): current board positions, of size (N, 64)
+            board_positions (torch.LongTensor): current board positions,
+            of size (N, 64)
 
-            moves (torch.LongTensor): move sequences, of size (N, move_sequence_length)
+            moves (torch.LongTensor): move sequences, of size (N,
+            move_sequence_length)
 
-            lengths (torch.LongTensor): true lengths of move sequences, not including <move> and <pad> tokens, of size (N, 1)
+            lengths (torch.LongTensor): true lengths of move sequences,
+            not including <move> and <pad> tokens, of size (N, 1)
 
         Returns:
 
-            torch.FloatTensor: decoded next-move probabilities, of size (N, move_sequence_length, vocab_size)
+            torch.FloatTensor: decoded next-move probabilities, of size
+            (N, move_sequence_length, vocab_size)
         """
         # Encoder
         boards = self.board_encoder(
@@ -920,7 +947,8 @@ class LabelSmoothedCE(torch.nn.Module):
 
         Args:
 
-            eps (float, optional): Smoothing co-efficient. Defaults to 0.1.
+            eps (float, optional): Smoothing co-efficient. Defaults to
+            0.1.
         """
         super(LabelSmoothedCE, self).__init__()
         self.eps = eps
@@ -931,22 +959,30 @@ class LabelSmoothedCE(torch.nn.Module):
 
         Args:
 
-            moves (torch.FloatTensor): predicted next-move probabilities, of size (N, max_move_sequence_length, move_vocab_size)
+            moves (torch.FloatTensor): predicted next-move
+            probabilities, of size (N, max_move_sequence_length,
+            move_vocab_size)
 
-            actual_moves (torch.LongTensor): actual moves made by the winner of this game, of size (N, move_vocab_size)
+            actual_moves (torch.LongTensor): actual moves made by the
+            winner of this game, of size (N, move_vocab_size)
 
-            lengths (torch.LongTensor): true lengths of move sequences, not including <move> and <pad> tokens, of size (N, 1)
+            lengths (torch.LongTensor): true lengths of move sequences,
+            not including <move> and <pad> tokens, of size (N, 1)
 
         Returns:
 
-            torch.Tensor: mean label-smoothed cross-entropy loss, a scalar
+            torch.Tensor: mean label-smoothed cross-entropy loss, a
+            scalar
         """
         # Remove pad-positions and flatten
         moves, _, _, _ = pack_padded_sequence(
             input=moves, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False
         )  # (sum(lengths), vocab_size)
         actual_moves, _, _, _ = pack_padded_sequence(
-            input=actual_moves, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False
+            input=actual_moves,
+            lengths=lengths.cpu(),
+            batch_first=True,
+            enforce_sorted=False,
         )  # (sum(lengths))
 
         # "Smoothed" one-hot vectors for the gold sequences

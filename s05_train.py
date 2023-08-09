@@ -5,6 +5,7 @@ import torch.optim
 import torch.utils.data
 import torch.backends.cudnn as cudnn
 from utils import *
+from tqdm import tqdm
 from datasets import ChessDataset
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -33,7 +34,7 @@ max_move_sequence_length = 10  # expected maximum length of move sequences
 
 # Learning parameters
 checkpoint = None  # path to model checkpoint, None if none
-batch_size = 384
+batch_size = 512
 batches_per_step = (
     2500 // batch_size
 )  # perform a training step, i.e. update parameters, once every so many batches
@@ -108,6 +109,11 @@ def main():
         betas=betas,
         eps=epsilon,
     )
+
+    # Move to default device
+    model = model.to(DEVICE)
+
+    # Load checkpoint if available
     if checkpoint is not None:
         checkpoint = torch.load(checkpoint)
         start_epoch = checkpoint["epoch"] + 1
@@ -117,13 +123,10 @@ def main():
 
     # Loss function
     criterion = LabelSmoothedCE(eps=label_smoothing)
-
-    # Move to default device
-    model = model.to(DEVICE)
     criterion = criterion.to(DEVICE)
 
     # Compile model
-    compiled_model = torch.compile(model, mode="default")
+    compiled_model = torch.compile(model, mode="default", dynamic=True)
 
     # AMP scaler
     scaler = GradScaler(enabled=use_amp)
@@ -151,7 +154,7 @@ def main():
         validate(val_loader=val_loader, model=compiled_model, criterion=criterion)
 
         # Save checkpoint
-        save_checkpoint(epoch, compiled_model, optimizer)
+        save_checkpoint(epoch, model, optimizer)
 
 
 def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
@@ -160,7 +163,8 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
 
     Args:
 
-        train_loader (torch.utils.data.DataLoader): loader for training data
+        train_loader (torch.utils.data.DataLoader): loader for training
+        data
 
         model (torch.nn.Module): model
 
@@ -223,10 +227,10 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         with torch.autocast(
             device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
         ):
-            # Forward prop.
-            # Note: If "max_move_sequence_length" is 8
-            # then the move sequence will be like "<move> a b c <loss> <pad> <pad> <pad> <pad>"
-            # We do not pass the last token to the Decoder as input (i.e. we left shift)
+            # Forward prop. Note: If "max_move_sequence_length" is 8
+            # then the move sequence will be like "<move> a b c <loss>
+            # <pad> <pad> <pad> <pad>" We do not pass the last token to
+            # the Decoder as input (i.e. we left shift)
             predicted_moves = model(
                 turns=turns,
                 white_kingside_castling_rights=white_kingside_castling_rights,
@@ -239,10 +243,10 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                 lengths=lengths,
             )  # (N, max_move_sequence_length, move_vocab_size)
 
-            # Loss
-            # Note: If max_move_sequence_length is 8
-            # then the move sequence will be like "<move> a b c <loss> <pad> <pad> <pad> <pad>"
-            # We do not pass the first token as an "actual_move" as it is not one (i.e. we right shift)
+            # Loss Note: If max_move_sequence_length is 8 then the move
+            # sequence will be like "<move> a b c <loss> <pad> <pad>
+            # <pad> <pad>" We do not pass the first token as an
+            # "actual_move" as it is not one (i.e. we right shift)
             loss = criterion(
                 moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
             )  # scalar
@@ -254,7 +258,8 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         # Keep track of losses
         losses.update(loss.item() * batches_per_step, lengths.sum().item())
 
-        # Update model (i.e. perform a training step) only after gradients are accumulated from batches_per_step batches
+        # Update model (i.e. perform a training step) only after
+        # gradients are accumulated from batches_per_step batches
         if (i + 1) % batches_per_step == 0:
             scaler.step(optimizer)
             scaler.update()
@@ -297,7 +302,8 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             # Reset step time
             start_step_time = time.time()
 
-            # If this is the last one or two epochs, save checkpoints at regular intervals for averaging
+            # If this is the last one or two epochs, save checkpoints at
+            # regular intervals for averaging
             if (
                 epoch in [epochs - 1, epochs - 2] and step % 1500 == 0
             ):  # 'epoch' is 0-indexed
@@ -315,12 +321,14 @@ def validate(val_loader, model, criterion):
 
     Args:
 
-        val_loader (torch.utils.data.DataLoader): loader for validation data
+        val_loader (torch.utils.data.DataLoader): loader for validation
+        data
 
         model (torch.nn.Module): model
 
         criterion (torch.nn.Module): label-smoothed cross-entropy loss
     """
+    print("\n")
     model.eval()  # eval mode disables dropout
 
     # Prohibit gradient computation explicitly
@@ -337,7 +345,7 @@ def validate(val_loader, model, criterion):
             board_positions,
             moves,
             lengths,
-        ) in enumerate(val_loader):
+        ) in tqdm(enumerate(val_loader), desc="Validating", total=len(val_loader)):
 
             # Move to default device
             turns = turns.to(DEVICE)  # (N, 1)
@@ -361,10 +369,11 @@ def validate(val_loader, model, criterion):
             with torch.autocast(
                 device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
             ):
-                # Forward prop.
-                # Note: If "max_move_sequence_length" is 8
-                # then the move sequence will be like "<move> a b c <loss> <pad> <pad> <pad> <pad>"
-                # We do not pass the last token to the Decoder as input (i.e. we left shift)
+                # Forward prop. Note: If "max_move_sequence_length" is 8
+                # then the move sequence will be like "<move> a b c
+                # <loss> <pad> <pad> <pad> <pad>". We do not pass the
+                # last token to the Decoder as input (i.e. we left
+                # shift)
                 predicted_moves = model(
                     turns=turns,
                     white_kingside_castling_rights=white_kingside_castling_rights,
@@ -377,10 +386,11 @@ def validate(val_loader, model, criterion):
                     lengths=lengths,
                 )  # (N, max_move_sequence_length, move_vocab_size)
 
-                # Loss
-                # Note: If max_move_sequence_length is 8
-                # then the move sequence will be like "<move> a b c <loss> <pad> <pad> <pad> <pad>"
-                # We do not pass the first token as an "actual_move" as it is not one (i.e. we right shift)
+                # Loss Note: If max_move_sequence_length is 8 then the
+                # move sequence will be like "<move> a b c <loss> <pad>
+                # <pad> <pad> <pad>". We do not pass the first token as
+                # an "actual_move" as it is not one (i.e. we right
+                # shift)
                 loss = criterion(
                     moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
                 )  # scalar
@@ -388,7 +398,7 @@ def validate(val_loader, model, criterion):
             # Keep track of losses
             losses.update(loss.item(), lengths.sum().item())
 
-        print("\nValidation loss: %.3f\n\n" % losses.avg)
+        print("\nValidation loss: %.3f\n" % losses.avg)
 
 
 if __name__ == "__main__":
