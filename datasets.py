@@ -1,10 +1,7 @@
 import os
 import json
-import time
 import torch
-import random
 import tables as tb
-from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -52,10 +49,10 @@ class ChessDataset(Dataset):
         board_position = torch.IntTensor(
             self.encoded_table[self.indices[i]]["board_position"]
         )  # (64)
-        output_sequence = torch.IntTensor(
+        output_sequence = torch.LongTensor(
             self.encoded_table[self.indices[i]]["output_sequence"]
         )  # (o)
-        output_sequence_length = torch.IntTensor(
+        output_sequence_length = torch.LongTensor(
             [self.encoded_table[self.indices[i]]["output_sequence_length"]]
         )  # (1), value <= o - 1
 

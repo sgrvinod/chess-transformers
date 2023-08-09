@@ -479,7 +479,7 @@ class BoardEncoder(nn.Module):
         batch_size = turns.size(0)  # N
 
         # Embeddings
-        embeddings = torch.stack(
+        embeddings = torch.cat(
             [
                 self.turn_embeddings(turns),
                 self.white_kingside_castling_rights_embeddings(
@@ -519,7 +519,7 @@ class BoardEncoder(nn.Module):
                 key_value_sequences=boards,
                 key_value_sequence_lengths=torch.LongTensor(
                     [BOARD_STATUS_LENGTH] * batch_size
-                ),
+                ).to(DEVICE),
             )  # (N, BOARD_STATUS_LENGTH, d_model)
             boards = encoder_layer[1](
                 sequences=boards
@@ -690,7 +690,7 @@ class MoveDecoder(nn.Module):
                 key_value_sequences=boards,
                 key_value_sequence_lengths=torch.LongTensor(
                     [BOARD_STATUS_LENGTH] * batch_size
-                ),
+                ).to(DEVICE),
             )  # (N, max_move_sequence_length, d_model)
             moves = decoder_layer[2](
                 sequences=moves
@@ -810,7 +810,7 @@ class ChessTransformer(nn.Module):
             self.board_encoder.turn_embeddings.weight,
             mean=0.0,
             std=math.pow(self.d_model, -0.5),
-    )
+        )
         nn.init.normal_(
             self.board_encoder.white_kingside_castling_rights_embeddings.weight,
             mean=0.0,
@@ -901,7 +901,7 @@ class ChessTransformer(nn.Module):
         # Decoder
         moves = self.move_decoder(
             moves, lengths, boards
-        )  # (N, max_move_sequence_length, vocab_size)
+        )  # (N, max_move_sequence_length, move_vocab_size)
 
         return moves
 
@@ -943,10 +943,10 @@ class LabelSmoothedCE(torch.nn.Module):
         """
         # Remove pad-positions and flatten
         moves, _, _, _ = pack_padded_sequence(
-            input=moves, lengths=lengths, batch_first=True, enforce_sorted=False
+            input=moves, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False
         )  # (sum(lengths), vocab_size)
         actual_moves, _, _, _ = pack_padded_sequence(
-            input=actual_moves, lengths=lengths, batch_first=True, enforce_sorted=False
+            input=actual_moves, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False
         )  # (sum(lengths))
 
         # "Smoothed" one-hot vectors for the gold sequences
@@ -971,13 +971,18 @@ class LabelSmoothedCE(torch.nn.Module):
 
         return loss
 
+
 if __name__ == "__main__":
     import json
-    vocabulary = json.load(open("/media/sgr/SSD/lichess data (copy)/vocabulary.json", "r"))
+
+    vocabulary = json.load(
+        open("/media/sgr/SSD/lichess data (copy)/vocabulary.json", "r")
+    )
     vocab_sizes = dict()
     for k in vocabulary:
         vocab_sizes[k] = len(vocabulary[k])
-    model = ChessTransformer(vocab_sizes=vocab_sizes,
+    model = ChessTransformer(
+        vocab_sizes=vocab_sizes,
         max_move_sequence_length=10,
         d_model=512,
         n_heads=8,
@@ -985,5 +990,9 @@ if __name__ == "__main__":
         d_values=64,
         d_inner=2048,
         n_layers=6,
-        dropout=0.1)
-    print("There are %d learnable parameters in this model." % sum([p.numel() for p in model.parameters()]))
+        dropout=0.1,
+    )
+    print(
+        "There are %d learnable parameters in this model."
+        % sum([p.numel() for p in model.parameters()])
+    )
