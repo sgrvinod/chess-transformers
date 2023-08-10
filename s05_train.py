@@ -9,12 +9,13 @@ from tqdm import tqdm
 from datasets import ChessDataset
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from model import ChessTransformer, LabelSmoothedCE
-
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )  # CPU isn't really practical here
+WRITER = SummaryWriter(log_dir="runs/vanilla")
 
 # Data parameters
 data_folder = "/media/sgr/SSD/lichess data (copy)/"  # folder with data files
@@ -151,7 +152,7 @@ def main():
         )
 
         # One epoch's validation
-        validate(val_loader=val_loader, model=compiled_model, criterion=criterion)
+        validate(val_loader=val_loader, model=compiled_model, criterion=criterion, epoch=epoch)
 
         # Save checkpoint
         save_checkpoint(epoch, model, optimizer)
@@ -263,7 +264,6 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         if (i + 1) % batches_per_step == 0:
             scaler.step(optimizer)
             scaler.update()
-            # optimizer.step()
             optimizer.zero_grad()
 
             # This step is now complete
@@ -298,6 +298,12 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                         losses=losses,
                     )
                 )
+            
+            # Log to tensorboard
+            WRITER.add_scalar(tag="train/loss", scalar_value=losses.val, global_step=step)
+            WRITER.add_scalar(tag="train/lr", scalar_value=optimizer.param_groups[0]["lr"], global_step=step)
+            WRITER.add_scalar(tag="train/data_time", scalar_value=data_time.val, global_step=step)
+            WRITER.add_scalar(tag="train/step_time", scalar_value=step_time.val, global_step=step)
 
             # Reset step time
             start_step_time = time.time()
@@ -315,7 +321,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         start_data_time = time.time()
 
 
-def validate(val_loader, model, criterion):
+def validate(val_loader, model, criterion, epoch):
     """
     One epoch's validation.
 
@@ -327,6 +333,8 @@ def validate(val_loader, model, criterion):
         model (torch.nn.Module): model
 
         criterion (torch.nn.Module): label-smoothed cross-entropy loss
+
+        epoch (int): epoch number
     """
     print("\n")
     model.eval()  # eval mode disables dropout
@@ -397,6 +405,9 @@ def validate(val_loader, model, criterion):
 
             # Keep track of losses
             losses.update(loss.item(), lengths.sum().item())
+
+        # Log to tensorboard
+        WRITER.add_scalar(tag="val/loss", scalar_value=losses.val, global_step=epoch + 1)
 
         print("\nValidation loss: %.3f\n" % losses.avg)
 
