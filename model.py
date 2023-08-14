@@ -508,13 +508,11 @@ class BoardEncoder(nn.Module):
             dim=1,
         )  # (N, BOARD_STATUS_LENGTH, d_model)
 
-        # Add positional embeddings TODO: Do I need to rescale
-        # embeddings here?
-        boards = embeddings * math.sqrt(
-            self.d_model
-        ) + self.positional_embeddings.weight.unsqueeze(
+        # Add positional embeddings
+        boards = embeddings + self.positional_embeddings.weight.unsqueeze(
             0
         )  # (N, BOARD_STATUS_LENGTH, d_model)
+        boards = boards * math.sqrt(self.d_model)  # (N, BOARD_STATUS_LENGTH, d_model)
 
         # Dropout
         boards = self.apply_dropout(boards)  # (N, BOARD_STATUS_LENGTH, d_model)
@@ -525,8 +523,9 @@ class BoardEncoder(nn.Module):
             boards = encoder_layer[0](
                 query_sequences=boards,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=BOARD_STATUS_LENGTH
-                * torch.ones(batch_size).long().to(DEVICE),
+                key_value_sequence_lengths=torch.LongTensor(
+                    [BOARD_STATUS_LENGTH] * batch_size
+                ).to(DEVICE),
             )  # (N, BOARD_STATUS_LENGTH, d_model)
             boards = encoder_layer[1](
                 sequences=boards
@@ -678,12 +677,12 @@ class MoveDecoder(nn.Module):
         # Embeddings
         embeddings = self.embeddings(moves)  # (N, max_move_sequence_length, d_model)
 
-        # Add positional embeddings TODO: Do I need to rescale
-        # embeddings here?
-        moves = embeddings * math.sqrt(
-            self.d_model
-        ) + self.positional_embeddings.weight.unsqueeze(
+        # Add positional embeddings
+        moves = embeddings + self.positional_embeddings.weight.unsqueeze(
             0
+        )  # (N, max_move_sequence_length, d_model)
+        moves = moves * math.sqrt(
+            self.d_model
         )  # (N, max_move_sequence_length, d_model)
 
         # Dropout
@@ -853,15 +852,24 @@ class ChessTransformer(nn.Module):
             mean=0.0,
             std=math.pow(self.d_model, -0.5),
         )
-        # TODO: figure out positional embeddings' initialization
-
-        # Share weights between the embedding layer in the Decoder and
-        # the logit layer
+        nn.init.normal_(
+            self.board_encoder.positional_embeddings.weight,
+            mean=0.0,
+            std=math.pow(self.d_model, -0.5),
+        )
         nn.init.normal_(
             self.move_decoder.embeddings.weight,
             mean=0.0,
             std=math.pow(self.d_model, -0.5),
         )
+        nn.init.normal_(
+            self.move_decoder.positional_embeddings.weight,
+            mean=0.0,
+            std=math.pow(self.d_model, -0.5),
+        )
+
+        # Share weights between the embedding layer in the Decoder and
+        # the logit layer
         self.move_decoder.fc.weight = self.move_decoder.embeddings.weight
 
         print("Model initialized.")

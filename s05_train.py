@@ -37,7 +37,7 @@ max_move_sequence_length = 10  # expected maximum length of move sequences
 checkpoint = None  # path to model checkpoint, None if none
 batch_size = 512
 batches_per_step = (
-    2500 // batch_size
+    2048 // batch_size
 )  # perform a training step, i.e. update parameters, once every so many batches
 print_frequency = 1  # print status once every so many steps
 n_steps = 100000  # number of training steps
@@ -152,7 +152,12 @@ def main():
         )
 
         # One epoch's validation
-        validate(val_loader=val_loader, model=compiled_model, criterion=criterion, epoch=epoch)
+        validate(
+            val_loader=val_loader,
+            model=compiled_model,
+            criterion=criterion,
+            epoch=epoch,
+        )
 
         # Save checkpoint
         save_checkpoint(epoch, model, optimizer)
@@ -185,6 +190,9 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
     data_time = AverageMeter()  # data loading time
     step_time = AverageMeter()  # forward prop. + back prop. time
     losses = AverageMeter()  # loss
+    top1_accuracies = AverageMeter()  # top-1 accuracy of first move
+    top3_accuracies = AverageMeter()  # top-3 accuracy of first move
+    top5_accuracies = AverageMeter()  # top-5 accuracy of first move
 
     # Starting time
     start_data_time = time.time()
@@ -259,6 +267,16 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         # Keep track of losses
         losses.update(loss.item() * batches_per_step, lengths.sum().item())
 
+        # Keep track of accuracy
+        top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
+            predicted_moves=predicted_moves[:, 0, :],
+            actual_moves=moves[:, 1],
+            k=[1, 3, 5],
+        )
+        top1_accuracies.update(top1_accuracy, moves.shape[0])
+        top3_accuracies.update(top3_accuracy, moves.shape[0])
+        top5_accuracies.update(top5_accuracy, moves.shape[0])
+
         # Update model (i.e. perform a training step) only after
         # gradients are accumulated from batches_per_step batches
         if (i + 1) % batches_per_step == 0:
@@ -281,12 +299,13 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             # Print status
             if step % print_frequency == 0:
                 print(
-                    "Epoch {0}/{1}-----"
-                    "Batch {2}/{3}-----"
-                    "Step {4}/{5}-----"
-                    "Data Time {data_time.val:.3f} ({data_time.avg:.3f})-----"
-                    "Step Time {step_time.val:.3f} ({step_time.avg:.3f})-----"
-                    "Loss {losses.val:.4f} ({losses.avg:.4f})".format(
+                    "Epoch {0}/{1}---"
+                    "Batch {2}/{3}---"
+                    "Step {4}/{5}---"
+                    "Data Time {data_time.val:.3f} ({data_time.avg:.3f})---"
+                    "Step Time {step_time.val:.3f} ({step_time.avg:.3f})---"
+                    "Loss {losses.val:.4f} ({losses.avg:.4f})---"
+                    "Top-5 {top5s.val:.4f} ({top5s.avg:.4f})".format(
                         epoch + 1,
                         epochs,
                         i + 1,
@@ -296,14 +315,40 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                         step_time=step_time,
                         data_time=data_time,
                         losses=losses,
+                        top5s=top5_accuracies,
                     )
                 )
-            
+
             # Log to tensorboard
-            WRITER.add_scalar(tag="train/loss", scalar_value=losses.val, global_step=step)
-            WRITER.add_scalar(tag="train/lr", scalar_value=optimizer.param_groups[0]["lr"], global_step=step)
-            WRITER.add_scalar(tag="train/data_time", scalar_value=data_time.val, global_step=step)
-            WRITER.add_scalar(tag="train/step_time", scalar_value=step_time.val, global_step=step)
+            WRITER.add_scalar(
+                tag="train/loss", scalar_value=losses.val, global_step=step
+            )
+            WRITER.add_scalar(
+                tag="train/lr",
+                scalar_value=optimizer.param_groups[0]["lr"],
+                global_step=step,
+            )
+            WRITER.add_scalar(
+                tag="train/data_time", scalar_value=data_time.val, global_step=step
+            )
+            WRITER.add_scalar(
+                tag="train/step_time", scalar_value=step_time.val, global_step=step
+            )
+            WRITER.add_scalar(
+                tag="train/top1_accuracy",
+                scalar_value=top1_accuracies.val,
+                global_step=step,
+            )
+            WRITER.add_scalar(
+                tag="train/top3_accuracy",
+                scalar_value=top3_accuracies.val,
+                global_step=step,
+            )
+            WRITER.add_scalar(
+                tag="train/top5_accuracy",
+                scalar_value=top5_accuracies.val,
+                global_step=step,
+            )
 
             # Reset step time
             start_step_time = time.time()
@@ -342,6 +387,9 @@ def validate(val_loader, model, criterion, epoch):
     # Prohibit gradient computation explicitly
     with torch.no_grad():
         losses = AverageMeter()
+        top1_accuracies = AverageMeter()  # top-1 accuracy of first move
+        top3_accuracies = AverageMeter()  # top-3 accuracy of first move
+        top5_accuracies = AverageMeter()  # top-5 accuracy of first move
         # Batches
         for i, (
             turns,
@@ -372,7 +420,7 @@ def validate(val_loader, model, criterion, epoch):
             can_claim_draw = can_claim_draw.to(DEVICE)  # (N, 1)
             board_positions = board_positions.to(DEVICE)  # (N, 64)
             moves = moves.to(DEVICE)  # (N, max_move_sequence_length + 1)
-            lengths = lengths.squeeze(1).to(DEVICE)  # (N, 1)
+            lengths = lengths.squeeze(1).to(DEVICE)  # (N)
 
             with torch.autocast(
                 device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
@@ -406,10 +454,40 @@ def validate(val_loader, model, criterion, epoch):
             # Keep track of losses
             losses.update(loss.item(), lengths.sum().item())
 
-        # Log to tensorboard
-        WRITER.add_scalar(tag="val/loss", scalar_value=losses.val, global_step=epoch + 1)
+            # Keep track of accuracy
+            top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
+                predicted_moves=predicted_moves[:, 0, :],
+                actual_moves=moves[:, 1],
+                k=[1, 3, 5],
+            )
+            top1_accuracies.update(top1_accuracy, moves.shape[0])
+            top3_accuracies.update(top3_accuracy, moves.shape[0])
+            top5_accuracies.update(top5_accuracy, moves.shape[0])
 
-        print("\nValidation loss: %.3f\n" % losses.avg)
+        # Log to tensorboard
+        WRITER.add_scalar(
+            tag="val/loss", scalar_value=losses.avg, global_step=epoch + 1
+        )
+        WRITER.add_scalar(
+            tag="val/top1_accuracy",
+            scalar_value=top1_accuracies.avg,
+            global_step=epoch + 1,
+        )
+        WRITER.add_scalar(
+            tag="val/top3_accuracy",
+            scalar_value=top3_accuracies.avg,
+            global_step=epoch + 1,
+        )
+        WRITER.add_scalar(
+            tag="val/top5_accuracy",
+            scalar_value=top5_accuracies.avg,
+            global_step=epoch + 1,
+        )
+
+        print("\nValidation loss: %.3f" % losses.avg)
+        print("Validation top-1 accuracy: %.3f" % top1_accuracies.avg)
+        print("Validation top-3 accuracy: %.3f" % top3_accuracies.avg)
+        print("Validation top-5 accuracy: %.3f\n" % top5_accuracies.avg)
 
 
 if __name__ == "__main__":
