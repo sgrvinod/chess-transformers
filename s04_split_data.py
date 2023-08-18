@@ -1,21 +1,20 @@
 import os
 import json
 import tables as tb
+from config import *
 from tqdm import tqdm
 
 
-def split_data(
-    data_folder, h5_file, splits_file, val_split_fraction, test_split_fraction
-):
+def split_data():
 
-    assert val_split_fraction < test_split_fraction < 1.0
+    assert VAL_SPLIT_FRACTION < TEST_SPLIT_FRACTION < 1.0
     print(
         "\nIt is desired that the validation set will start %2.6f%% into the data, and the test set at %2.6f%%.\n"
-        % (val_split_fraction * 100.0, test_split_fraction * 100.0)
+        % (VAL_SPLIT_FRACTION * 100.0, TEST_SPLIT_FRACTION * 100.0)
     )
 
     # Open table in H5 file
-    h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="r")
+    h5_file = tb.open_file(os.path.join(DATA_FOLDER, H5_FILE), mode="r")
     encoded_table = h5_file.root.encoded_data
 
     # Find indices where the we know for sure new games begin and closely match the desired split fractions
@@ -26,11 +25,11 @@ def split_data(
     for i in tqdm(range(encoded_table.nrows), desc="Finding desired splits"):
         if encoded_table[i]["turn"] != winner:
             if not found_val_split_index:
-                if i / encoded_table.nrows >= val_split_fraction:
+                if i / encoded_table.nrows >= VAL_SPLIT_FRACTION:
                     val_split_index = i
                     found_val_split_index = True
             elif not found_test_split_index:
-                if i / encoded_table.nrows >= test_split_fraction:
+                if i / encoded_table.nrows >= TEST_SPLIT_FRACTION:
                     test_split_index = i
                     found_test_split_index = True
             else:
@@ -53,7 +52,7 @@ def split_data(
     )
 
     # Write to file
-    with open(os.path.join(data_folder, splits_file), "w") as j:
+    with open(os.path.join(DATA_FOLDER, SPLITS_FILE), "w") as j:
         json.dump(
             {"val_split_index": val_split_index, "test_split_index": test_split_index},
             j,
@@ -65,10 +64,4 @@ def split_data(
 
 
 if __name__ == "__main__":
-    split_data(
-        data_folder="/media/sgr/SSD/lichess data (copy)/",
-        h5_file="data.h5",
-        splits_file="splits.json",
-        val_split_fraction=0.85,
-        test_split_fraction=0.925,
-    )
+    split_data()

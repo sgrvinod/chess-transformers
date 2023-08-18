@@ -3,23 +3,14 @@ import chess
 import random
 import chess.pgn
 import tables as tb
+from config import *
 from tqdm import tqdm
 
 
 random.seed(1234)
 
 
-def parse_pgn_data(
-    data_folder, h5_file, max_output_sequence_length=10, output_sequence_notation="uci"
-):
-
-    # Check output sequence notation
-    output_sequence_notation = output_sequence_notation.lower()
-    assert output_sequence_notation in [
-        "lan",
-        "san",
-        "uci",
-    ], "Output sequences must be in LAN, SAN, or UCI notations!"
+def parse_pgn_data():
 
     # Create table description for HDF5 file
     class ChessTable(tb.IsDescription):
@@ -31,16 +22,16 @@ def parse_pgn_data(
         black_queenside_castling_rights = tb.BoolCol()
         can_claim_draw = tb.BoolCol()
         output_sequence = tb.StringCol(
-            shape=(max_output_sequence_length), itemsize=8, dflt="<pad>"
+            shape=(MAX_MOVE_SEQUENCE_LENGTH), itemsize=8, dflt="<pad>"
         )  # "dflt" doesn't work for some reason
 
     # Delete HDF5 file if it already exists; start anew
-    if os.path.exists(os.path.join(data_folder, h5_file)):
-        os.remove(os.path.join(data_folder, h5_file))
+    if os.path.exists(os.path.join(DATA_FOLDER, H5_FILE)):
+        os.remove(os.path.join(DATA_FOLDER, H5_FILE))
 
     # Create new HDF5 file
     h5_file = tb.open_file(
-        os.path.join(data_folder, h5_file), mode="w", title="data file"
+        os.path.join(DATA_FOLDER, H5_FILE), mode="w", title="data file"
     )
 
     # Create table in HDF5 file
@@ -50,12 +41,12 @@ def parse_pgn_data(
     row = table.row
 
     # Get names of PGN files
-    pgn_files = [f for f in os.listdir(data_folder) if f.endswith(".pgn")]
+    pgn_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith(".pgn")]
     print("There are %d PGN files to parse." % len(pgn_files))
 
     # Parse PGN files
     for pgn_file in sorted(pgn_files):
-        pgn_file_path = os.path.join(data_folder, pgn_file)
+        pgn_file_path = os.path.join(DATA_FOLDER, pgn_file)
 
         # Read, extract, parse games
         games = read_pgn_file(pgn_file_path)
@@ -64,8 +55,8 @@ def parse_pgn_data(
             input_and_output_sequences.extend(
                 get_input_and_output_sequences(
                     game,
-                    max_output_sequence_length=max_output_sequence_length,
-                    output_sequence_notation=output_sequence_notation,
+                    max_output_sequence_length=MAX_MOVE_SEQUENCE_LENGTH,
+                    output_sequence_notation=MOVE_SEQUENCE_NOTATION,
                 )
             )
         del games
@@ -75,20 +66,20 @@ def parse_pgn_data(
             row["board_position"] = datapoint["input_sequence"]["board_position"]
             row["turn"] = datapoint["input_sequence"]["turn"]
             row["white_kingside_castling_rights"] = datapoint["input_sequence"][
-                "castling_rights"
-            ]["white_kingside"]
+                "white_kingside_castling_rights"
+            ]
             row["white_queenside_castling_rights"] = datapoint["input_sequence"][
-                "castling_rights"
-            ]["white_queenside"]
+                "white_queenside_castling_rights"
+            ]
             row["black_kingside_castling_rights"] = datapoint["input_sequence"][
-                "castling_rights"
-            ]["black_kingside"]
+                "black_kingside_castling_rights"
+            ]
             row["black_queenside_castling_rights"] = datapoint["input_sequence"][
-                "castling_rights"
-            ]["black_queenside"]
+                "black_queenside_castling_rights"
+            ]
             row["can_claim_draw"] = datapoint["input_sequence"]["can_claim_draw"]
             row["output_sequence"] = datapoint["output_sequence"] + ["<pad>"] * (
-                max_output_sequence_length - len(datapoint["output_sequence"])
+                MAX_MOVE_SEQUENCE_LENGTH - len(datapoint["output_sequence"])
             )
             row.append()
         table.flush()
@@ -142,29 +133,17 @@ def get_board_status(board):
     board_status = {
         "board_position": board_position,
         "turn": turn,
-        "castling_rights": {
-            "white_kingside": white_can_castle_kingside,
-            "white_queenside": white_can_castle_queenside,
-            "black_kingside": black_can_castle_kingside,
-            "black_queenside": black_can_castle_queenside,
-        },
+        "white_kingside_castling_rights": white_can_castle_kingside,
+        "white_queenside_castling_rights": white_can_castle_queenside,
+        "black_kingside_castling_rights": black_can_castle_kingside,
+        "black_queenside_castling_rights": black_can_castle_queenside,
         "can_claim_draw": can_claim_draw,
     }
 
     return board_status
 
 
-def get_input_and_output_sequences(
-    game, max_output_sequence_length=10, output_sequence_notation="uci"
-):
-
-    # Check output sequence notation
-    output_sequence_notation = output_sequence_notation.lower()
-    assert output_sequence_notation in [
-        "lan",
-        "san",
-        "uci",
-    ], "Output sequences must be in LAN, SAN, or UCI notations!"
+def get_input_and_output_sequences(game):
 
     # Get all moves from this game, and board status before each move
     board = game.board()
@@ -176,15 +155,15 @@ def get_input_and_output_sequences(
         board_status_before_moves.append(get_board_status(board))
 
         # Get this move in the desired output sequence notation
-        if output_sequence_notation == "uci":
+        if MOVE_SEQUENCE_NOTATION == "uci":
             all_moves.append(
                 board.uci(move).replace("+", "").replace("#", "").replace("x", "")
             )
-        elif output_sequence_notation == "lan":
+        elif MOVE_SEQUENCE_NOTATION == "lan":
             all_moves.append(
                 board.lan(move).replace("+", "").replace("#", "").replace("x", "")
             )
-        elif output_sequence_notation == "san":
+        elif MOVE_SEQUENCE_NOTATION == "san":
             all_moves.append(
                 board.san(move).replace("+", "").replace("#", "").replace("x", "")
             )
@@ -231,7 +210,7 @@ def get_input_and_output_sequences(
                 {
                     "input_sequence": board_status_before_moves[move_number],
                     "output_sequence": all_moves[
-                        move_number : move_number + max_output_sequence_length
+                        move_number : move_number + MAX_MOVE_SEQUENCE_LENGTH
                     ],
                 }
             )
@@ -240,4 +219,4 @@ def get_input_and_output_sequences(
 
 
 if __name__ == "__main__":
-    parse_pgn_data(data_folder="/media/sgr/SSD/lichess data (copy)/", h5_file="data.h5")
+    parse_pgn_data(data_folder=DATA_FOLDER, h5_file=H5_FILE)

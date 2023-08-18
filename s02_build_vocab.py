@@ -1,13 +1,14 @@
 import os
 import json
 import tables as tb
+from config import *
 from tqdm import tqdm
 from collections import Counter
 
 
-def build_vocabulary(data_folder, h5_file, vocabulary_file):
+def build_vocabulary():
     # Open table in H5 file
-    h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="r")
+    h5_file = tb.open_file(os.path.join(DATA_FOLDER, H5_FILE), mode="r")
     table = h5_file.root.data
 
     # Create move, board position vocabularies (with indices in order of most to least common moves)
@@ -42,7 +43,7 @@ def build_vocabulary(data_folder, h5_file, vocabulary_file):
     )
 
     # Save vocabulary to file
-    with open(os.path.join(data_folder, vocabulary_file), "w") as j:
+    with open(os.path.join(DATA_FOLDER, VOCAB_FILE), "w") as j:
         json.dump(vocabulary, j, indent=4)
 
     print("\nSaved to file.\n")
@@ -52,8 +53,4 @@ def build_vocabulary(data_folder, h5_file, vocabulary_file):
 
 
 if __name__ == "__main__":
-    build_vocabulary(
-        data_folder="/media/sgr/SSD/lichess data (copy)/",
-        h5_file="data.h5",
-        vocabulary_file="vocabulary.json",
-    )
+    build_vocabulary()

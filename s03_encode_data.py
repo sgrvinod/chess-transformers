@@ -2,29 +2,30 @@ import os
 import json
 import numpy as np
 import tables as tb
+from config import *
 from tqdm import tqdm
 
 
 def encode(item, vocabulary):
     if isinstance(item, list):  # output sequence
         return [vocabulary[it.decode()] for it in item]
-    elif isinstance(item, np.bytes_):  # turn or board position
-        item = item.decode()
+    elif isinstance(item, np.bytes_) or isinstance(item, str):  # turn or board position
+        item = item.decode() if isinstance(item, np.bytes_) else item
         return (
             vocabulary[item] if item in vocabulary else [vocabulary[it] for it in item]
         )
-    elif isinstance(item, np.bool_):  # castling rights and draw potential
+    elif isinstance(item, np.bool_)  or isinstance(item, bool):  # castling rights and draw potential
         return vocabulary[str(item).lower()]
     else:
         raise NotImplementedError
 
 
-def encode_data(data_folder, h5_file, vocabulary_file):
+def encode_data():
     # Load vocabularies
-    vocabulary = json.load(open(os.path.join(data_folder, vocabulary_file), "r"))
+    vocabulary = json.load(open(os.path.join(DATA_FOLDER, VOCAB_FILE), "r"))
 
     # Open table in H5 file
-    h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="a")
+    h5_file = tb.open_file(os.path.join(DATA_FOLDER, H5_FILE), mode="a")
     table = h5_file.root.data
 
     # Create table description for HDF5 file
@@ -91,8 +92,4 @@ def encode_data(data_folder, h5_file, vocabulary_file):
 
 
 if __name__ == "__main__":
-    encode_data(
-        data_folder="/media/sgr/SSD/lichess data (copy)/",
-        h5_file="data.h5",
-        vocabulary_file="vocabulary.json",
-    )
+    encode_data()

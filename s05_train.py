@@ -5,140 +5,100 @@ import torch.optim
 import torch.utils.data
 import torch.backends.cudnn as cudnn
 from utils import *
+from config import *
 from tqdm import tqdm
 from datasets import ChessDataset
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from model import ChessTransformer, LabelSmoothedCE
 
-DEVICE = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)  # CPU isn't really practical here
-WRITER = SummaryWriter(log_dir="runs/vanilla")
-
-# Data parameters
-data_folder = "/media/sgr/SSD/lichess data (copy)/"  # folder with data files
-h5_file = "data.h5"  # HDF5 file with (encoded) data
-splits_file = "splits.json"  # JSON file with split indices
-vocab_file = "vocabulary.json"  # JSON file with all vocabularies
-
-# Model parameters
-d_model = 512  # size of vectors throughout the transformer model
-n_heads = 8  # number of heads in the multi-head attention
-d_queries = 64  # size of query vectors (and also the size of the key vectors) in the multi-head attention
-d_values = 64  # size of value vectors in the multi-head attention
-d_inner = 2048  # an intermediate size in the position-wise FC
-n_layers = 6  # number of layers in the Encoder and Decoder
-dropout = 0.1  # dropout probability
-max_move_sequence_length = 10  # expected maximum length of move sequences
-
-# Learning parameters
-checkpoint = None  # path to model checkpoint, None if none
-batch_size = 512
-batches_per_step = (
-    2048 // batch_size
-)  # perform a training step, i.e. update parameters, once every so many batches
-print_frequency = 1  # print status once every so many steps
-n_steps = 100000  # number of training steps
-warmup_steps = 8000  # number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official transformer repo.
-step = 1  # the step number, start from 1 to prevent math error in the next line
-lr = get_lr(
-    step=step, d_model=d_model, warmup_steps=warmup_steps
-)  # see utils.py for learning rate schedule; twice the schedule in the paper, as in the official transformer repo.
-start_epoch = 0  # start at this epoch
-betas = (0.9, 0.98)  # beta coefficients in the Adam optimizer
-epsilon = 1e-9  # epsilon term in the Adam optimizer
-label_smoothing = 0.1  # label smoothing co-efficient in the Cross Entropy loss
-cudnn.benchmark = False  # since input tensor size is variable
-use_amp = True  # use automatic mixed precision training?
-
+cudnn.benchmark = False
 
 def main():
     """
     Training and validation.
     """
-    global checkpoint, step, start_epoch, epoch, epochs
+    global CHECKPOINT, STEP, START_EPOCH, epoch, epochs
 
     # Initialize data-loaders
     train_loader = DataLoader(
         dataset=ChessDataset(
-            data_folder=data_folder,
-            h5_file=h5_file,
-            splits_file=splits_file,
+            data_folder=DATA_FOLDER,
+            h5_file=H5_FILE,
+            splits_file=SPLITS_FILE,
             split="train",
         ),
-        batch_size=batch_size,
-        num_workers=8,
-        pin_memory=False,
-        prefetch_factor=2,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        prefetch_factor=PREFETCH_FACTOR,
         shuffle=True,
     )
     val_loader = DataLoader(
         dataset=ChessDataset(
-            data_folder=data_folder,
-            h5_file=h5_file,
-            splits_file=splits_file,
+            data_folder=DATA_FOLDER,
+            h5_file=H5_FILE,
+            splits_file=SPLITS_FILE,
             split="val",
         ),
-        batch_size=batch_size,
-        num_workers=8,
-        pin_memory=False,
-        prefetch_factor=2,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        prefetch_factor=PREFETCH_FACTOR,
         shuffle=False,
     )
 
     # Initialize model or load checkpoint
-    vocabulary = json.load(open(os.path.join(data_folder, vocab_file), "r"))
+    vocabulary = json.load(open(os.path.join(DATA_FOLDER, VOCAB_FILE), "r"))
     vocab_sizes = dict()
     for k in vocabulary:
         vocab_sizes[k] = len(vocabulary[k])
     model = ChessTransformer(
         vocab_sizes=vocab_sizes,
-        max_move_sequence_length=max_move_sequence_length,
-        d_model=d_model,
-        n_heads=n_heads,
-        d_queries=d_queries,
-        d_values=d_values,
-        d_inner=d_inner,
-        n_layers=n_layers,
-        dropout=dropout,
+        max_move_sequence_length=MAX_MOVE_SEQUENCE_LENGTH,
+        d_model=D_MODEL,
+        n_heads=N_HEADS,
+        d_queries=D_QUERIES,
+        d_values=D_VALUES,
+        d_inner=D_INNER,
+        n_layers=N_LAYERS,
+        dropout=DROPOUT,
     )
     optimizer = torch.optim.Adam(
         params=[p for p in model.parameters() if p.requires_grad],
-        lr=lr,
-        betas=betas,
-        eps=epsilon,
+        lr=LR,
+        betas=BETAS,
+        eps=EPSILON,
     )
 
     # Move to default device
     model = model.to(DEVICE)
 
     # Load checkpoint if available
-    if checkpoint is not None:
-        checkpoint = torch.load(checkpoint)
-        start_epoch = checkpoint["epoch"] + 1
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if TRAINING_CHECKPOINT is not None:
+        TRAINING_CHECKPOINT = torch.load(TRAINING_CHECKPOINT)
+        start_epoch = TRAINING_CHECKPOINT["epoch"] + 1
+        model.load_state_dict(TRAINING_CHECKPOINT["model_state_dict"])
+        optimizer.load_state_dict(TRAINING_CHECKPOINT["optimizer_state_dict"])
         print("\nLoaded checkpoint from epoch %d.\n" % start_epoch)
 
     # Loss function
-    criterion = LabelSmoothedCE(eps=label_smoothing)
+    criterion = LabelSmoothedCE(eps=LABEL_SMOOTHING)
     criterion = criterion.to(DEVICE)
 
     # Compile model
     compiled_model = torch.compile(model, mode="default", dynamic=True)
 
     # AMP scaler
-    scaler = GradScaler(enabled=use_amp)
+    scaler = GradScaler(enabled=USE_AMP)
 
     # Find total epochs to train
-    epochs = (n_steps // (len(train_loader) // batches_per_step)) + 1
+    epochs = (N_STEPS // (len(train_loader) // BATCHES_PER_STEP)) + 1
 
     # Epochs
     for epoch in range(start_epoch, epochs):
         # Step
-        step = epoch * len(train_loader) // batches_per_step
+        step = epoch * len(train_loader) // BATCHES_PER_STEP
 
         # One epoch's training
         train(
@@ -234,7 +194,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         data_time.update(time.time() - start_data_time)
 
         with torch.autocast(
-            device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
+            device_type=DEVICE.type, dtype=torch.float16, enabled=USE_AMP
         ):
             # Forward prop. Note: If "max_move_sequence_length" is 8
             # then the move sequence will be like "<move> a b c <loss>
@@ -259,13 +219,13 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             loss = criterion(
                 moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
             )  # scalar
-            loss = loss / batches_per_step
+            loss = loss / BATCHES_PER_STEP
 
         # Backward prop.
         scaler.scale(loss).backward()
 
         # Keep track of losses
-        losses.update(loss.item() * batches_per_step, lengths.sum().item())
+        losses.update(loss.item() * BATCHES_PER_STEP, lengths.sum().item())
 
         # Keep track of accuracy
         top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
@@ -279,7 +239,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
 
         # Update model (i.e. perform a training step) only after
         # gradients are accumulated from batches_per_step batches
-        if (i + 1) % batches_per_step == 0:
+        if (i + 1) % BATCHES_PER_STEP == 0:
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
@@ -290,14 +250,14 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             # Update learning rate after each step
             change_lr(
                 optimizer,
-                new_lr=get_lr(step=step, d_model=d_model, warmup_steps=warmup_steps),
+                new_lr=get_lr(step=step, d_model=D_MODEL, warmup_steps=WARMUP_STEPS),
             )
 
             # Time taken for this training step
             step_time.update(time.time() - start_step_time)
 
             # Print status
-            if step % print_frequency == 0:
+            if step % PRINT_FREQUENCY == 0:
                 print(
                     "Epoch {0}/{1}---"
                     "Batch {2}/{3}---"
@@ -311,7 +271,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                         i + 1,
                         len(train_loader),
                         step,
-                        n_steps,
+                        N_STEPS,
                         step_time=step_time,
                         data_time=data_time,
                         losses=losses,
@@ -423,7 +383,7 @@ def validate(val_loader, model, criterion, epoch):
             lengths = lengths.squeeze(1).to(DEVICE)  # (N)
 
             with torch.autocast(
-                device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
+                device_type=DEVICE.type, dtype=torch.float16, enabled=USE_AMP
             ):
                 # Forward prop. Note: If "max_move_sequence_length" is 8
                 # then the move sequence will be like "<move> a b c

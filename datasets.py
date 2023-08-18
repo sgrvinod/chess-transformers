@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import tables as tb
+from config import *
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -74,9 +75,9 @@ class ChessDataset(Dataset):
 
 if __name__ == "__main__":
     dataset = ChessDataset(
-        data_folder="/media/sgr/SSD/lichess data (copy)/",
-        h5_file="data.h5",
-        splits_file="splits.json",
+        data_folder=DATA_FOLDER,
+        h5_file=H5_FILE,
+        splits_file=SPLITS_FILE,
         split="train",
     )
     print(len(dataset))

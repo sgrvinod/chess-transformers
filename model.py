@@ -2,10 +2,8 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
+from config import *
 from torch.nn.utils.rnn import pack_padded_sequence
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-BOARD_STATUS_LENGTH = 70
 
 
 class MultiHeadAttention(nn.Module):
@@ -539,7 +537,7 @@ class BoardEncoder(nn.Module):
 
 class MoveDecoder(nn.Module):
     """
-    The Decoder.
+    The Move Decoder.
     """
 
     def __init__(
@@ -654,7 +652,7 @@ class MoveDecoder(nn.Module):
         boards,
     ):
         """
-        _summary_
+        Forward prop.
 
         Args:
 
@@ -718,7 +716,7 @@ class MoveDecoder(nn.Module):
 
 class ChessTransformer(nn.Module):
     """
-    The Chess Transformer network.
+    The Chess Transformer.
     """
 
     def __init__(
@@ -963,7 +961,7 @@ class LabelSmoothedCE(torch.nn.Module):
 
     def forward(self, moves, actual_moves, lengths):
         """
-        _summary_
+        Forward prop.
 
         Args:
 
