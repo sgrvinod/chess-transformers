@@ -103,19 +103,17 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def accuracy(predicted_moves, actual_moves, k=[1, 3, 5]):
+def topk_accuracy(logits, targets, k=[1, 3, 5]):
     """
     Compute "top-k" accuracies for multiple values of "k".
 
     Args:
 
-        predicted_moves (torch.FloatTensor): predicted next-move
-        probabilities, of size (N, max_move_sequence_length,
-        move_vocab_size)
+        logits (torch.FloatTensor): predicted next-move
+        probabilities, of size (N, move_vocab_size)
 
-        actual_moves (torch.LongTensor): actual moves made by the winner
+        targets (torch.LongTensor): actual moves made by the winner
         of this game, of size (N)
-
 
         k (list, optional): Values of "k". Defaults to [1, 3, 5].
 
@@ -124,18 +122,49 @@ def accuracy(predicted_moves, actual_moves, k=[1, 3, 5]):
         list: "top-k" accuracies
     """
     with torch.no_grad():
-        batch_size = predicted_moves.shape[0]
+        batch_size = logits.shape[0]
 
         # Get move indices corresponding to top-max(k) scores
-        _, indices = predicted_moves.topk(k=max(k), dim=1)  # (N, max(k))
+        _, indices = logits.topk(k=max(k), dim=1)  # (N, max(k))
 
         # Expand actual (target) moves to the same shape
-        actual_moves = actual_moves.unsqueeze(1).expand_as(indices)  # (N, max(k))
+        targets = targets.unsqueeze(1).expand_as(indices)  # (N, max(k))
 
         # Calculate top-k accuracies
-        correct_predictions = indices == actual_moves
+        correct_predictions = indices == targets
         topk_accuracies = [
             correct_predictions[:, :k_value].sum().item() / batch_size for k_value in k
         ]
 
         return topk_accuracies
+
+def topk_sampling(logits, k=5):
+    """
+    Randomly sample from the multinomial distribution formed by the "top-k" logits only.
+
+    Args:
+
+        logits (torch.FloatTensor): predicted next-move
+        probabilities, of size (N, move_vocab_size)
+        
+        k (int, optional): Value of "k". Defaults to 5.
+
+    Returns:
+
+        torch.LongTensor: samples (indices), of size (N)
+    """
+    # Find the kth-highest logit value per row
+    max_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
+
+    # All other logit values must be ignored; they should evaluate to 0 under a softmax op.
+    logits[logits < max_logit_values] = -float("inf")  #  (N, move_vocab_size)
+
+    # Apply softmax
+    probabilities = torch.softmax(logits, dim=1)  #  (N, move_vocab_size)
+
+    # Sample from this multinomial probability distribution
+    samples = torch.multinomial(probabilities, num_samples=1).squeeze(1)  #  (N)
+
+    return samples
+
+

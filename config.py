@@ -34,8 +34,9 @@ D_INNER = 2048  # an intermediate size in the position-wise FC
 N_LAYERS = 6  # number of layers in the Encoder and Decoder
 DROPOUT = 0.1  # dropout probability
 MAX_MOVE_SEQUENCE_LENGTH = 10  # expected maximum length of move sequences
-COMPILE_MODE = "default"
-DYNAMIC_COMPILE = True
+COMPILE_MODE = "default"  # mode of model compilation (see torch.compile())
+DYNAMIC_COMPILE = True  # expect tensors with dynamic shapes?
+SAMPLING_K = 5  # k in top-k sampling model predictions during play
 
 # Learning
 BATCH_SIZE = 512  # batch size
