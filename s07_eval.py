@@ -112,9 +112,9 @@ def evaluate():
                 )  # (N, max_move_sequence_length, move_vocab_size)
 
             # Keep track of accuracy
-            top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
-                predicted_moves=predicted_moves[:, 0, :],
-                actual_moves=moves[:, 1],
+            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                logits=predicted_moves[:, 0, :],
+                targets=moves[:, 1],
                 k=[1, 3, 5],
             )
             top1_accuracies.update(top1_accuracy, moves.shape[0])

@@ -153,6 +153,8 @@ def topk_sampling(logits, k=5):
 
         torch.LongTensor: samples (indices), of size (N)
     """
+    k = min(k, logits.shape[1])
+
     # Find the kth-highest logit value per row
     max_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
 

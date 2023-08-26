@@ -228,9 +228,9 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         losses.update(loss.item() * BATCHES_PER_STEP, lengths.sum().item())
 
         # Keep track of accuracy
-        top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
-            predicted_moves=predicted_moves[:, 0, :],
-            actual_moves=moves[:, 1],
+        top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+            logits=predicted_moves[:, 0, :],
+            targets=moves[:, 1],
             k=[1, 3, 5],
         )
         top1_accuracies.update(top1_accuracy, moves.shape[0])
@@ -415,9 +415,9 @@ def validate(val_loader, model, criterion, epoch):
             losses.update(loss.item(), lengths.sum().item())
 
             # Keep track of accuracy
-            top1_accuracy, top3_accuracy, top5_accuracy = accuracy(
-                predicted_moves=predicted_moves[:, 0, :],
-                actual_moves=moves[:, 1],
+            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                logits=predicted_moves[:, 0, :],
+                targets=moves[:, 1],
                 k=[1, 3, 5],
             )
             top1_accuracies.update(top1_accuracy, moves.shape[0])
