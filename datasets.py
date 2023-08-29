@@ -1,8 +1,9 @@
 import os
 import json
 import torch
+import argparse
 import tables as tb
-from config import *
+from importlib import import_module
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -50,12 +51,12 @@ class ChessDataset(Dataset):
         board_position = torch.IntTensor(
             self.encoded_table[self.indices[i]]["board_position"]
         )  # (64)
-        output_sequence = torch.LongTensor(
-            self.encoded_table[self.indices[i]]["output_sequence"]
-        )  # (o)
-        output_sequence_length = torch.LongTensor(
-            [self.encoded_table[self.indices[i]]["output_sequence_length"]]
-        )  # (1), value <= o - 1
+        move_sequence = torch.LongTensor(
+            self.encoded_table[self.indices[i]]["move_sequence"]
+        )  # (m)
+        move_sequence_length = torch.LongTensor(
+            [self.encoded_table[self.indices[i]]["move_sequence_length"]]
+        )  # (1), value <= m - 1
 
         return (
             turn,
@@ -65,8 +66,8 @@ class ChessDataset(Dataset):
             black_queenside_castling_rights,
             can_claim_draw,
             board_position,
-            output_sequence,
-            output_sequence_length,
+            move_sequence,
+            move_sequence_length,
         )
 
     def __len__(self):
@@ -74,15 +75,18 @@ class ChessDataset(Dataset):
 
 
 if __name__ == "__main__":
+    # Get configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_name", type=str, help="Name of configuration file.")
+    args = parser.parse_args()
+    CONFIG = import_module("configs.{}".format(args.config_name))
+
+    # Dataset
     dataset = ChessDataset(
-        data_folder=DATA_FOLDER,
-        h5_file=H5_FILE,
-        splits_file=SPLITS_FILE,
+        data_folder=CONFIG.DATA_FOLDER,
+        h5_file=CONFIG.H5_FILE,
+        splits_file=CONFIG.SPLITS_FILE,
         split="train",
     )
     print(len(dataset))
     print(dataset[17])
-    dataloader = DataLoader(dataset, batch_size=5)
-    for d in dataloader:
-        print(d)
-        break

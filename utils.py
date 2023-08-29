@@ -1,8 +1,17 @@
+import os
 import math
+import json
 import torch
 
 
 def view_game(game):
+    """
+    View the progression of a chess game.
+
+    Args:
+
+        game (chess.pgn.Game): The game to be viewed.
+    """
     board = game.board()
     for move_number, move in enumerate(game.mainline_moves()):
         print("\n")
@@ -14,6 +23,29 @@ def view_game(game):
         print(board)
 
 
+def get_vocab_sizes(data_folder, vocab_file):
+    """
+    Get sizes of all vocabularies in the vocabulary file.
+
+    Args:
+
+        data_folder (str): The folder containing all data files.
+
+        vocab_file (str): The vocabulary file.
+
+    Returns:
+
+        dict: A dictionary containing the sizes of each vocabulary in
+        the vocabulary file.
+    """
+    vocabulary = json.load(open(os.path.join(data_folder, vocab_file), "r"))
+    vocab_sizes = dict()
+    for k in vocabulary:
+        vocab_sizes[k] = len(vocabulary[k])
+
+    return vocab_sizes
+
+
 def get_lr(step, d_model, warmup_steps):
     """
     The LR schedule. This version below is twice the definition in the
@@ -21,17 +53,17 @@ def get_lr(step, d_model, warmup_steps):
 
     Args:
 
-        step (int): training step number
+        step (int): Training step number.
 
-        d_model (int): size of vectors throughout the transformer model
+        d_model (int): Size of vectors throughout the transformer model.
 
-        warmup_steps (int): number of warmup steps where learning rate
+        warmup_steps (int): Number of warmup steps where learning rate
         is increased linearly; twice the value in the paper, as in the
-        official T2T repo
+        official T2T repo.
 
     Returns:
 
-        float: updated learning rate
+        float: Updated learning rate.
     """
     lr = (
         2.0
@@ -42,19 +74,21 @@ def get_lr(step, d_model, warmup_steps):
     return lr
 
 
-def save_checkpoint(epoch, model, optimizer, prefix=""):
+def save_checkpoint(epoch, model, optimizer, config_name, prefix=""):
     """
     Checkpoint saver. Each save overwrites previous save.
 
     Args:
 
-        epoch (int): epoch number (0-indexed)
+        epoch (int): Epoch number (0-indexed).
 
-        model (torch.nn.Module): transformer model
+        model (torch.nn.Module): Transformer model.
 
-        optimizer (torch.optim.adam.Adam): optimizer
+        optimizer (torch.optim.adam.Adam): Optimizer.
 
-        prefix (str, optional): checkpoint filename prefix. Defaults to
+        config_name (str): Configuration name.
+
+        prefix (str, optional): Checkpoint filename prefix. Defaults to
         "".
     """
     state = {
@@ -62,7 +96,7 @@ def save_checkpoint(epoch, model, optimizer, prefix=""):
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
     }
-    filename = prefix + "transformer_checkpoint.pt"
+    filename = prefix + config_name + ".pt"
     torch.save(state, filename)
     print("Checkpoint saved.\n")
 
@@ -73,10 +107,10 @@ def change_lr(optimizer, new_lr):
 
     Args:
 
-        optimizer (torch.optim.adam.Adam): optimizer whose learning rate
-        must be changed
+        optimizer (torch.optim.adam.Adam): Optimizer whose learning rate
+        must be changed.
 
-        new_lr (float): new learning rate
+        new_lr (float): New learning rate.
     """
     for param_group in optimizer.param_groups:
         param_group["lr"] = new_lr
@@ -109,17 +143,17 @@ def topk_accuracy(logits, targets, k=[1, 3, 5]):
 
     Args:
 
-        logits (torch.FloatTensor): predicted next-move
-        probabilities, of size (N, move_vocab_size)
+        logits (torch.FloatTensor): Predicted next-move probabilities,
+        of size (N, move_vocab_size).
 
-        targets (torch.LongTensor): actual moves made by the winner
-        of this game, of size (N)
+        targets (torch.LongTensor): Actual moves made by the winner of
+        this game, of size (N).
 
         k (list, optional): Values of "k". Defaults to [1, 3, 5].
 
     Returns:
 
-        list: "top-k" accuracies
+        list: "Top-k" accuracies.
     """
     with torch.no_grad():
         batch_size = logits.shape[0]
@@ -138,27 +172,30 @@ def topk_accuracy(logits, targets, k=[1, 3, 5]):
 
         return topk_accuracies
 
+
 def topk_sampling(logits, k=5):
     """
-    Randomly sample from the multinomial distribution formed by the "top-k" logits only.
+    Randomly sample from the multinomial distribution formed by the
+    "top-k" logits only.
 
     Args:
 
-        logits (torch.FloatTensor): predicted next-move
-        probabilities, of size (N, move_vocab_size)
-        
+        logits (torch.FloatTensor): Predicted next-move probabilities,
+        of size (N, move_vocab_size).
+
         k (int, optional): Value of "k". Defaults to 5.
 
     Returns:
 
-        torch.LongTensor: samples (indices), of size (N)
+        torch.LongTensor: Samples (indices), of size (N).
     """
     k = min(k, logits.shape[1])
 
     # Find the kth-highest logit value per row
     max_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
 
-    # All other logit values must be ignored; they should evaluate to 0 under a softmax op.
+    # All other logit values must be ignored; they should evaluate to 0
+    # under a softmax op.
     logits[logits < max_logit_values] = -float("inf")  #  (N, move_vocab_size)
 
     # Apply softmax
@@ -168,5 +205,3 @@ def topk_sampling(logits, k=5):
     samples = torch.multinomial(probabilities, num_samples=1).squeeze(1)  #  (N)
 
     return samples
-
-

@@ -1,26 +1,44 @@
 import os
 import torch
-from config import *
+import argparse
+from importlib import import_module
 from collections import OrderedDict
 
-def average_checkpoints():
+
+def average_checkpoints(
+    checkpoint_folder, checkpoint_avg_prefix, checkpoint_avg_suffix, final_checkpoint
+):
     """
     Averages the states of multiple checkpoints into a single
     checkpoint.
+
+    Args:
+
+        checkpoint_folder (str): The folder containing the checkpoints
+        to be averaged.
+
+        checkpoint_avg_prefix (str): A pattern for matching the
+        beginnings of the names of these checkpoints.
+
+        checkpoint_avg_suffix (str): A pattern for matching the ends of
+        the names of these checkpoints.
+
+        final_checkpoint (str): The final, averaged checkpoint to be
+        saved.
     """
 
     # Get list of checkpoint names
     checkpoint_names = [
         f
-        for f in os.listdir(CHECKPOINT_FOLDER)
-        if f.startswith(CHECKPOINT_AVG_PREFIX) and f.endswith(CHECKPOINT_AVG_SUFFIX)
+        for f in os.listdir(checkpoint_folder)
+        if f.startswith(checkpoint_avg_prefix) and f.endswith(checkpoint_avg_suffix)
     ]
     assert len(checkpoint_names) > 0, "Did not find any checkpoints!"
 
     # Average parameters from checkpoints
     averaged_params = OrderedDict()
     for c in checkpoint_names:
-        checkpoint = torch.load(os.path.join(CHECKPOINT_FOLDER, c))
+        checkpoint = torch.load(os.path.join(checkpoint_folder, c))
         checkpoint_params = checkpoint["model_state_dict"]
         checkpoint_param_names = checkpoint_params.keys()
         for param_name in checkpoint_param_names:
@@ -42,9 +60,24 @@ def average_checkpoints():
             del averaged_params[param_name]
 
     # Save averaged model
-    torch.save({"model_state_dict": averaged_params}, os.path.join(CHECKPOINT_FOLDER, FINAL_CHECKPOINT))
+    torch.save(
+        {"model_state_dict": averaged_params},
+        os.path.join(checkpoint_folder, final_checkpoint),
+    )
     print("\nCheckpoints averaged and saved to file.\n")
 
 
 if __name__ == "__main__":
-    average_checkpoints()
+    # Get configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_name", type=str, help="Name of configuration file.")
+    args = parser.parse_args()
+    CONFIG = import_module("configs.{}".format(args.config_name))
+
+    # Average checkpoints
+    average_checkpoints(
+        checkpoint_folder=CONFIG.CHECKPOINT_FOLDER,
+        checkpoint_avg_prefix=CONFIG.CHECKPOINT_AVG_PREFIX,
+        checkpoint_avg_suffix=CONFIG.CHECKPOINT_AVG_SUFFIX,
+        final_checkpoint=CONFIG.FINAL_CHECKPOINT,
+    )

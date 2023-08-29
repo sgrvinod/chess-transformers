@@ -1,57 +1,58 @@
 import os
 import json
+import argparse
 import torch.optim
 import torch.utils.data
 from utils import *
-from config import *
 from tqdm import tqdm
-from datasets import ChessDataset
-from model import ChessTransformer
-from torch.cuda.amp import GradScaler
+from importlib import import_module
 from torch.utils.data import DataLoader
 
-scaler = GradScaler(enabled=USE_AMP)
+DEVICE = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)  # CPU isn't really practical here
 
-def evaluate():
+
+def evaluate(CONFIG):
+    """
+    Evaluation the final checkpoint against the test data.
+
+    Args:
+
+        CONFIG (dict): The configuration. See ./configs.
+    """
 
     # Initialize model and load checkpoint
-    vocabulary = json.load(open(os.path.join(DATA_FOLDER, VOCAB_FILE), "r"))
-    vocab_sizes = dict()
-    for k in vocabulary:
-        vocab_sizes[k] = len(vocabulary[k])
-    model = ChessTransformer(
-        vocab_sizes=vocab_sizes,
-        max_move_sequence_length=MAX_MOVE_SEQUENCE_LENGTH,
-        d_model=D_MODEL,
-        n_heads=N_HEADS,
-        d_queries=D_QUERIES,
-        d_values=D_VALUES,
-        d_inner=D_INNER,
-        n_layers=N_LAYERS,
-        dropout=DROPOUT,
-    )
+    model = CONFIG.MODEL(CONFIG)
     model = model.to(DEVICE)
-    checkpoint = torch.load(os.path.join(CHECKPOINT_FOLDER, FINAL_CHECKPOINT))
+    checkpoint = torch.load(
+        os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.FINAL_CHECKPOINT)
+    )
     model.load_state_dict(checkpoint["model_state_dict"])
     print("\nLoaded checkpoint.\n")
 
     # Dataloader
     test_loader = DataLoader(
-        dataset=ChessDataset(
-            data_folder=DATA_FOLDER,
-            h5_file=H5_FILE,
-            splits_file=SPLITS_FILE,
+        dataset=CONFIG.DATASET(
+            data_folder=CONFIG.DATA_FOLDER,
+            h5_file=CONFIG.H5_FILE,
+            splits_file=CONFIG.SPLITS_FILE,
             split="test",
         ),
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
-        pin_memory=False,
-        prefetch_factor=PREFETCH_FACTOR,
+        batch_size=CONFIG.BATCH_SIZE,
+        num_workers=CONFIG.NUM_WORKERS,
+        pin_memory=CONFIG.PIN_MEMORY,
+        prefetch_factor=CONFIG.PREFETCH_FACTOR,
         shuffle=False,
     )
 
     # Compile model
-    compiled_model = torch.compile(model, mode=COMPILE_MODE, dynamic=DYNAMIC_COMPILE)
+    compiled_model = torch.compile(
+        model,
+        mode=CONFIG.COMPILATION_MODE,
+        dynamic=CONFIG.DYNAMIC_COMPILATION,
+        disable=CONFIG.DISABLE_COMPILATION,
+    )
     compiled_model.eval()  # eval mode disables dropout
 
     # Prohibit gradient computation explicitly
@@ -92,7 +93,7 @@ def evaluate():
             lengths = lengths.squeeze(1).to(DEVICE)  # (N)
 
             with torch.autocast(
-                device_type=DEVICE.type, dtype=torch.float16, enabled=USE_AMP
+                device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
             ):
                 # Forward prop. Note: If "max_move_sequence_length" is 8
                 # then the move sequence will be like "<move> a b c
@@ -127,4 +128,11 @@ def evaluate():
 
 
 if __name__ == "__main__":
-    evaluate()
+    # Get configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_name", type=str, help="Name of configuration file.")
+    args = parser.parse_args()
+    CONFIG = import_module("configs.{}".format(args.config_name))
+
+    # Evaluate model
+    evaluate(CONFIG)

@@ -1,9 +1,12 @@
 import math
 import torch
-import torch.nn.functional as F
+import argparse
 from torch import nn
-from config import *
-from torch.nn.utils.rnn import pack_padded_sequence
+from importlib import import_module
+
+DEVICE = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)  # CPU isn't really practical here
 
 
 class MultiHeadAttention(nn.Module):
@@ -403,9 +406,9 @@ class BoardEncoder(nn.Module):
 
         # Positional embedding layer
         self.positional_embeddings = nn.Embedding(
-            BOARD_STATUS_LENGTH,
+            70,
             d_model,
-        ).to(DEVICE)
+        )
 
         # Encoder layers
         self.encoder_layers = nn.ModuleList(
@@ -521,9 +524,9 @@ class BoardEncoder(nn.Module):
             boards = encoder_layer[0](
                 query_sequences=boards,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=torch.LongTensor(
-                    [BOARD_STATUS_LENGTH] * batch_size
-                ).to(DEVICE),
+                key_value_sequence_lengths=torch.LongTensor([70] * batch_size).to(
+                    DEVICE
+                ),
             )  # (N, BOARD_STATUS_LENGTH, d_model)
             boards = encoder_layer[1](
                 sequences=boards
@@ -697,9 +700,9 @@ class MoveDecoder(nn.Module):
             moves = decoder_layer[1](
                 query_sequences=moves,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=torch.LongTensor(
-                    [BOARD_STATUS_LENGTH] * batch_size
-                ).to(DEVICE),
+                key_value_sequence_lengths=torch.LongTensor([70] * batch_size).to(
+                    DEVICE
+                ),
             )  # (N, max_move_sequence_length, d_model)
             moves = decoder_layer[2](
                 sequences=moves
@@ -721,82 +724,77 @@ class ChessTransformer(nn.Module):
 
     def __init__(
         self,
-        vocab_sizes,
-        max_move_sequence_length,
-        d_model,
-        n_heads,
-        d_queries,
-        d_values,
-        d_inner,
-        n_layers,
-        dropout,
+        CONFIG,
     ):
         """
         Init.
 
         Args:
 
-            vocab_sizes (dict): sizes of the vocabularies of the Encoder
-            sequence components and the Decoder (move) sequence
+            CONFIG (dict): configuration containing the following
+            parameters for the model:
 
-            max_move_sequence_length (int): expected maximum length of
-            output (move) sequences
+                VOCAB_SIZES (dict): sizes of the vocabularies of the Encoder
+                sequence components and the Decoder (move) sequence
 
-            d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for the Encoder and
-            Decoder
+                MAX_MOVE_SEQUENCE_LENGTH_IN_MODEL (int): expected maximum length of
+                output (move) sequences
 
-            n_heads (int): number of heads in the multi-head attention
+                D_MODEL (int): size of vectors throughout the transformer
+                model, i.e. input and output sizes for the Encoder and
+                Decoder
 
-            d_queries (int): size of query vectors (and also the size of
-            the key vectors) in the multi-head attention
+                N_HEADS (int): number of heads in the multi-head attention
 
-            d_values (int): size of value vectors in the multi-head
-            attention
+                D_QUERIES (int): size of query vectors (and also the size of
+                the key vectors) in the multi-head attention
 
-            d_inner (int): an intermediate size in the position-wise FC
+                D_VALUES (int): size of value vectors in the multi-head
+                attention
 
-            n_layers (int): number of [multi-head attention + multi-head
-            attention + position-wise FC] layers in the Encoder and
-            Decoder
+                D_INNER (int): an intermediate size in the position-wise FC
 
-            dropout (int): dropout probability
+                N_LAYERS (int): number of [multi-head attention + multi-head
+                attention + position-wise FC] layers in the Encoder and
+                Decoder
+
+                DROPOUT (int): dropout probability
         """
         super(ChessTransformer, self).__init__()
 
-        self.vocab_sizes = vocab_sizes
-        self.max_move_sequence_length = max_move_sequence_length
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.d_queries = d_queries
-        self.d_values = d_values
-        self.d_inner = d_inner
-        self.n_layers = n_layers
-        self.dropout = dropout
+        self.vocab_sizes = CONFIG.VOCAB_SIZES
+        self.max_move_sequence_length = CONFIG.MAX_MOVE_SEQUENCE_LENGTH_IN_MODEL
+        self.d_model = CONFIG.D_MODEL
+        self.n_heads = CONFIG.N_HEADS
+        self.d_queries = CONFIG.D_QUERIES
+        self.d_values = CONFIG.D_VALUES
+        self.d_inner = CONFIG.D_INNER
+        self.n_layers = CONFIG.N_LAYERS
+        self.dropout = CONFIG.DROPOUT
 
         # Encoder
         self.board_encoder = BoardEncoder(
-            vocab_sizes=vocab_sizes,
-            d_model=d_model,
-            n_heads=n_heads,
-            d_queries=d_queries,
-            d_values=d_values,
-            d_inner=d_inner,
-            n_layers=n_layers,
-            dropout=dropout,
+            vocab_sizes=self.vocab_sizes,
+            d_model=self.d_model,
+            n_heads=self.n_heads,
+            d_queries=self.d_queries,
+            d_values=self.d_values,
+            d_inner=self.d_inner,
+            n_layers=self.n_layers,
+            dropout=self.dropout,
         )
 
         # Decoder
         self.move_decoder = MoveDecoder(
-            vocab_size=vocab_sizes["output_sequence"],
-            max_move_sequence_length=max_move_sequence_length,
-            d_model=d_model,
-            n_heads=n_heads,
-            d_queries=d_queries,
-            d_values=d_values,
-            d_inner=d_inner,
-            n_layers=n_layers,
-            dropout=dropout,
+            vocab_size=self.vocab_sizes["move_sequence"],
+            max_move_sequence_length=self.max_move_sequence_length,
+            d_model=self.d_model,
+            n_heads=self.n_heads,
+            d_queries=self.d_queries,
+            d_values=self.d_values,
+            d_inner=self.d_inner,
+            n_layers=self.n_layers,
+            dropout=self.dropout,
         )
 
         # Initialize weights
@@ -870,8 +868,6 @@ class ChessTransformer(nn.Module):
         # the logit layer
         self.move_decoder.fc.weight = self.move_decoder.embeddings.weight
 
-        print("Model initialized.")
-
     def forward(
         self,
         turns,
@@ -939,101 +935,15 @@ class ChessTransformer(nn.Module):
         return moves
 
 
-class LabelSmoothedCE(torch.nn.Module):
-    """
-    Cross Entropy loss with label-smoothing as a form of regularization.
-
-    See "Rethinking the Inception Architecture for Computer Vision",
-    https://arxiv.org/abs/1512.00567
-    """
-
-    def __init__(self, eps=0.1):
-        """
-        Init.
-
-        Args:
-
-            eps (float, optional): Smoothing co-efficient. Defaults to
-            0.1.
-        """
-        super(LabelSmoothedCE, self).__init__()
-        self.eps = eps
-
-    def forward(self, moves, actual_moves, lengths):
-        """
-        Forward prop.
-
-        Args:
-
-            moves (torch.FloatTensor): predicted next-move
-            probabilities, of size (N, max_move_sequence_length,
-            move_vocab_size)
-
-            actual_moves (torch.LongTensor): actual moves made by the
-            winner of this game, of size (N, move_vocab_size)
-
-            lengths (torch.LongTensor): true lengths of move sequences,
-            not including <move> and <pad> tokens, of size (N, 1)
-
-        Returns:
-
-            torch.Tensor: mean label-smoothed cross-entropy loss, a
-            scalar
-        """
-        # Remove pad-positions and flatten
-        moves, _, _, _ = pack_padded_sequence(
-            input=moves, lengths=lengths.cpu(), batch_first=True, enforce_sorted=False
-        )  # (sum(lengths), vocab_size)
-        actual_moves, _, _, _ = pack_padded_sequence(
-            input=actual_moves,
-            lengths=lengths.cpu(),
-            batch_first=True,
-            enforce_sorted=False,
-        )  # (sum(lengths))
-
-        # "Smoothed" one-hot vectors for the gold sequences
-        target_vector = (
-            torch.zeros_like(moves)
-            .scatter(dim=1, index=actual_moves.unsqueeze(1), value=1.0)
-            .to(DEVICE)
-        )  # (sum(lengths), move_vocab_size), one-hot
-        target_vector = target_vector * (
-            1.0 - self.eps
-        ) + self.eps / target_vector.size(
-            1
-        )  # (sum(lengths), move_vocab_size), "smoothed" one-hot
-
-        # Compute smoothed cross-entropy loss
-        loss = (-1 * target_vector * F.log_softmax(moves, dim=1)).sum(
-            dim=1
-        )  # (sum(lengths))
-
-        # Compute mean loss
-        loss = torch.mean(loss)
-
-        return loss
-
-
 if __name__ == "__main__":
-    import json
+    # Get configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_name", type=str, help="Name of configuration file.")
+    args = parser.parse_args()
+    CONFIG = import_module("configs.{}".format(args.config_name))
 
-    vocabulary = json.load(
-        open("/media/sgr/SSD/lichess data (copy)/vocabulary.json", "r")
-    )
-    vocab_sizes = dict()
-    for k in vocabulary:
-        vocab_sizes[k] = len(vocabulary[k])
-    model = ChessTransformer(
-        vocab_sizes=vocab_sizes,
-        max_move_sequence_length=10,
-        d_model=512,
-        n_heads=8,
-        d_queries=64,
-        d_values=64,
-        d_inner=2048,
-        n_layers=6,
-        dropout=0.1,
-    )
+    # Model
+    model = CONFIG.MODEL(CONFIG).to(DEVICE)
     print(
         "There are %d learnable parameters in this model."
         % sum([p.numel() for p in model.parameters()])

@@ -1,104 +1,102 @@
 import os
 import json
 import time
+import argparse
 import torch.optim
 import torch.utils.data
 import torch.backends.cudnn as cudnn
 from utils import *
-from config import *
 from tqdm import tqdm
-from datasets import ChessDataset
+from importlib import import_module
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from model import ChessTransformer, LabelSmoothedCE
 
+DEVICE = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)  # CPU isn't really practical here
 cudnn.benchmark = False
 
-def main():
+
+def main(CONFIG):
     """
     Training and validation.
-    """
-    global CHECKPOINT, STEP, START_EPOCH, epoch, epochs
 
+    Args:
+
+        CONFIG (dict): Configuration. See ./configs.
+    """
     # Initialize data-loaders
     train_loader = DataLoader(
-        dataset=ChessDataset(
-            data_folder=DATA_FOLDER,
-            h5_file=H5_FILE,
-            splits_file=SPLITS_FILE,
+        dataset=CONFIG.DATASET(
+            data_folder=CONFIG.DATA_FOLDER,
+            h5_file=CONFIG.H5_FILE,
+            splits_file=CONFIG.SPLITS_FILE,
             split="train",
         ),
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
-        pin_memory=PIN_MEMORY,
-        prefetch_factor=PREFETCH_FACTOR,
+        batch_size=CONFIG.BATCH_SIZE,
+        num_workers=CONFIG.NUM_WORKERS,
+        pin_memory=CONFIG.PIN_MEMORY,
+        prefetch_factor=CONFIG.PREFETCH_FACTOR,
         shuffle=True,
     )
     val_loader = DataLoader(
-        dataset=ChessDataset(
-            data_folder=DATA_FOLDER,
-            h5_file=H5_FILE,
-            splits_file=SPLITS_FILE,
+        dataset=CONFIG.DATASET(
+            data_folder=CONFIG.DATA_FOLDER,
+            h5_file=CONFIG.H5_FILE,
+            splits_file=CONFIG.SPLITS_FILE,
             split="val",
         ),
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS,
-        pin_memory=PIN_MEMORY,
-        prefetch_factor=PREFETCH_FACTOR,
+        batch_size=CONFIG.BATCH_SIZE,
+        num_workers=CONFIG.NUM_WORKERS,
+        pin_memory=CONFIG.PIN_MEMORY,
+        prefetch_factor=CONFIG.PREFETCH_FACTOR,
         shuffle=False,
     )
 
-    # Initialize model or load checkpoint
-    vocabulary = json.load(open(os.path.join(DATA_FOLDER, VOCAB_FILE), "r"))
-    vocab_sizes = dict()
-    for k in vocabulary:
-        vocab_sizes[k] = len(vocabulary[k])
-    model = ChessTransformer(
-        vocab_sizes=vocab_sizes,
-        max_move_sequence_length=MAX_MOVE_SEQUENCE_LENGTH,
-        d_model=D_MODEL,
-        n_heads=N_HEADS,
-        d_queries=D_QUERIES,
-        d_values=D_VALUES,
-        d_inner=D_INNER,
-        n_layers=N_LAYERS,
-        dropout=DROPOUT,
-    )
-    optimizer = torch.optim.Adam(
-        params=[p for p in model.parameters() if p.requires_grad],
-        lr=LR,
-        betas=BETAS,
-        eps=EPSILON,
-    )
-
-    # Move to default device
+    # Model
+    model = CONFIG.MODEL(CONFIG)
     model = model.to(DEVICE)
 
+    # Optimizer
+    optimizer = CONFIG.OPTIMIZER(
+        params=[p for p in model.parameters() if p.requires_grad],
+        lr=CONFIG.LR,
+        betas=CONFIG.BETAS,
+        eps=CONFIG.EPSILON,
+    )
+
     # Load checkpoint if available
-    if TRAINING_CHECKPOINT is not None:
-        TRAINING_CHECKPOINT = torch.load(TRAINING_CHECKPOINT)
-        start_epoch = TRAINING_CHECKPOINT["epoch"] + 1
-        model.load_state_dict(TRAINING_CHECKPOINT["model_state_dict"])
-        optimizer.load_state_dict(TRAINING_CHECKPOINT["optimizer_state_dict"])
+    if CONFIG.TRAINING_CHECKPOINT is not None:
+        checkpoint = torch.load(CONFIG.TRAINING_CHECKPOINT)
+        start_epoch = checkpoint["epoch"] + 1
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print("\nLoaded checkpoint from epoch %d.\n" % start_epoch)
+    else:
+        start_epoch = 0
 
     # Loss function
-    criterion = LabelSmoothedCE(eps=LABEL_SMOOTHING)
+    criterion = CONFIG.CRITERION(eps=CONFIG.LABEL_SMOOTHING)
     criterion = criterion.to(DEVICE)
 
     # Compile model
-    compiled_model = torch.compile(model, mode="default", dynamic=True)
+    compiled_model = torch.compile(
+        model,
+        mode=CONFIG.COMPILATION_MODE,
+        dynamic=CONFIG.DYNAMIC_COMPILATION,
+        disable=CONFIG.DISABLE_COMPILATION,
+    )
 
     # AMP scaler
-    scaler = GradScaler(enabled=USE_AMP)
+    scaler = GradScaler(enabled=CONFIG.USE_AMP)
 
     # Find total epochs to train
-    epochs = (N_STEPS // (len(train_loader) // BATCHES_PER_STEP)) + 1
+    epochs = (CONFIG.N_STEPS // (len(train_loader) // CONFIG.BATCHES_PER_STEP)) + 1
 
     # Epochs
     for epoch in range(start_epoch, epochs):
         # Step
-        step = epoch * len(train_loader) // BATCHES_PER_STEP
+        step = epoch * len(train_loader) // CONFIG.BATCHES_PER_STEP
 
         # One epoch's training
         train(
@@ -108,7 +106,9 @@ def main():
             optimizer=optimizer,
             scaler=scaler,
             epoch=epoch,
+            epochs=epochs,
             step=step,
+            CONFIG=CONFIG,
         )
 
         # One epoch's validation
@@ -117,32 +117,39 @@ def main():
             model=compiled_model,
             criterion=criterion,
             epoch=epoch,
+            CONFIG=CONFIG,
         )
 
         # Save checkpoint
-        save_checkpoint(epoch, model, optimizer)
+        save_checkpoint(epoch, model, optimizer, CONFIG.NAME)
 
 
-def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
+def train(
+    train_loader, model, criterion, optimizer, scaler, epoch, epochs, step, CONFIG
+):
     """
     One epoch's training.
 
     Args:
 
-        train_loader (torch.utils.data.DataLoader): loader for training
-        data
+        train_loader (torch.utils.data.DataLoader): Loader for training
+        data.
 
-        model (torch.nn.Module): model
+        model (torch.nn.Module): Model.
 
-        criterion (torch.nn.Module): label-smoothed cross-entropy loss
+        criterion (torch.nn.Module): Loss criterion.
 
-        optimizer (torch.optim.adam.Adam): optimizer
+        optimizer (torch.optim.adam.Adam): Optimizer.
 
-        scaler (torch.cuda.amp.GradScaler): AMP scaler
+        scaler (torch.cuda.amp.GradScaler): AMP scaler.
 
-        epoch (int): epoch number
+        epoch (int): Epoch number.
 
-        step (int): step number
+        epochs (int): Total number of epochs.
+
+        step (int): Step number.
+
+        CONFIG (dict): Configuration.
     """
     model.train()  # training mode enables dropout
 
@@ -194,7 +201,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
         data_time.update(time.time() - start_data_time)
 
         with torch.autocast(
-            device_type=DEVICE.type, dtype=torch.float16, enabled=USE_AMP
+            device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
         ):
             # Forward prop. Note: If "max_move_sequence_length" is 8
             # then the move sequence will be like "<move> a b c <loss>
@@ -219,13 +226,13 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             loss = criterion(
                 moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
             )  # scalar
-            loss = loss / BATCHES_PER_STEP
+            loss = loss / CONFIG.BATCHES_PER_STEP
 
         # Backward prop.
         scaler.scale(loss).backward()
 
         # Keep track of losses
-        losses.update(loss.item() * BATCHES_PER_STEP, lengths.sum().item())
+        losses.update(loss.item() * CONFIG.BATCHES_PER_STEP, lengths.sum().item())
 
         # Keep track of accuracy
         top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
@@ -239,7 +246,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
 
         # Update model (i.e. perform a training step) only after
         # gradients are accumulated from batches_per_step batches
-        if (i + 1) % BATCHES_PER_STEP == 0:
+        if (i + 1) % CONFIG.BATCHES_PER_STEP == 0:
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
@@ -250,14 +257,16 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
             # Update learning rate after each step
             change_lr(
                 optimizer,
-                new_lr=get_lr(step=step, d_model=D_MODEL, warmup_steps=WARMUP_STEPS),
+                new_lr=get_lr(
+                    step=step, d_model=CONFIG.D_MODEL, warmup_steps=CONFIG.WARMUP_STEPS
+                ),
             )
 
             # Time taken for this training step
             step_time.update(time.time() - start_step_time)
 
             # Print status
-            if step % PRINT_FREQUENCY == 0:
+            if step % CONFIG.PRINT_FREQUENCY == 0:
                 print(
                     "Epoch {0}/{1}---"
                     "Batch {2}/{3}---"
@@ -271,7 +280,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                         i + 1,
                         len(train_loader),
                         step,
-                        N_STEPS,
+                        CONFIG.N_STEPS,
                         step_time=step_time,
                         data_time=data_time,
                         losses=losses,
@@ -280,31 +289,31 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                 )
 
             # Log to tensorboard
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/loss", scalar_value=losses.val, global_step=step
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/lr",
                 scalar_value=optimizer.param_groups[0]["lr"],
                 global_step=step,
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/data_time", scalar_value=data_time.val, global_step=step
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/step_time", scalar_value=step_time.val, global_step=step
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/top1_accuracy",
                 scalar_value=top1_accuracies.val,
                 global_step=step,
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/top3_accuracy",
                 scalar_value=top3_accuracies.val,
                 global_step=step,
             )
-            WRITER.add_scalar(
+            CONFIG.WRITER.add_scalar(
                 tag="train/top5_accuracy",
                 scalar_value=top5_accuracies.val,
                 global_step=step,
@@ -319,27 +328,33 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, step):
                 epoch in [epochs - 1, epochs - 2] and step % 1500 == 0
             ):  # 'epoch' is 0-indexed
                 save_checkpoint(
-                    epoch, model, optimizer, prefix="step" + str(step) + "_"
+                    epoch,
+                    model,
+                    optimizer,
+                    CONFIG.NAME,
+                    prefix="step" + str(step) + "_",
                 )
 
         # Reset data time
         start_data_time = time.time()
 
 
-def validate(val_loader, model, criterion, epoch):
+def validate(val_loader, model, criterion, epoch, CONFIG):
     """
     One epoch's validation.
 
     Args:
 
-        val_loader (torch.utils.data.DataLoader): loader for validation
+        val_loader (torch.utils.data.DataLoader): Loader for validation
         data
 
-        model (torch.nn.Module): model
+        model (torch.nn.Module): Model
 
-        criterion (torch.nn.Module): label-smoothed cross-entropy loss
+        criterion (torch.nn.Module): Loss criterion.
 
-        epoch (int): epoch number
+        epoch (int): Epoch number.
+
+        CONFIG (dict): Configuration.
     """
     print("\n")
     model.eval()  # eval mode disables dropout
@@ -383,7 +398,9 @@ def validate(val_loader, model, criterion, epoch):
             lengths = lengths.squeeze(1).to(DEVICE)  # (N)
 
             with torch.autocast(
-                device_type=DEVICE.type, dtype=torch.float16, enabled=USE_AMP
+                device_type=DEVICE.type,
+                dtype=torch.float16,
+                enabled=CONFIG.USE_AMP,
             ):
                 # Forward prop. Note: If "max_move_sequence_length" is 8
                 # then the move sequence will be like "<move> a b c
@@ -425,20 +442,20 @@ def validate(val_loader, model, criterion, epoch):
             top5_accuracies.update(top5_accuracy, moves.shape[0])
 
         # Log to tensorboard
-        WRITER.add_scalar(
+        CONFIG.WRITER.add_scalar(
             tag="val/loss", scalar_value=losses.avg, global_step=epoch + 1
         )
-        WRITER.add_scalar(
+        CONFIG.WRITER.add_scalar(
             tag="val/top1_accuracy",
             scalar_value=top1_accuracies.avg,
             global_step=epoch + 1,
         )
-        WRITER.add_scalar(
+        CONFIG.WRITER.add_scalar(
             tag="val/top3_accuracy",
             scalar_value=top3_accuracies.avg,
             global_step=epoch + 1,
         )
-        WRITER.add_scalar(
+        CONFIG.WRITER.add_scalar(
             tag="val/top5_accuracy",
             scalar_value=top5_accuracies.avg,
             global_step=epoch + 1,
@@ -451,4 +468,11 @@ def validate(val_loader, model, criterion, epoch):
 
 
 if __name__ == "__main__":
-    main()
+    # Get configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_name", type=str, help="Name of configuration file.")
+    args = parser.parse_args()
+    CONFIG = import_module("configs.{}".format(args.config_name))
+
+    # Train model
+    main(CONFIG)
