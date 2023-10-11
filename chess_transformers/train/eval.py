@@ -3,7 +3,7 @@ import json
 import argparse
 import torch.optim
 import torch.utils.data
-from utils import *
+from train.utils import *
 from tqdm import tqdm
 from importlib import import_module
 from torch.utils.data import DataLoader

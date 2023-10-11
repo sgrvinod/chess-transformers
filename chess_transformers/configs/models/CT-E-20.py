@@ -1,35 +1,19 @@
-import torch
 import os
-from datasets import ChessDataset
-from models import ChessTransformer
-from criteria import LabelSmoothedCE
-from utils import get_lr, get_vocab_sizes
+import torch
 from torch.utils.tensorboard import SummaryWriter
+
+from chess_transformers.configs.data.LE1222 import *
+from chess_transformers.train.datasets import ChessDataset
+from chess_transformers.train.utils import get_lr, get_vocab_sizes
+from chess_transformers.transformers.criteria import LabelSmoothedCE
+from chess_transformers.transformers.models import ChessTransformerEncoder
 
 
 ###############################
 ############ Name #############
 ###############################
 
-NAME = "CT_ED_0"  # name and identifier for this configuration
-
-###############################
-############ Data #############
-###############################
-
-# Data
-DATA_FOLDER = "/media/sgr/SSD/lichess data (copy)/"  # folder containing all data files
-H5_FILE = "data.h5"  # H5 file containing data
-MOVE_SEQUENCE_NOTATION = "uci"  # chess notation format for moves
-MAX_MOVE_SEQUENCE_LENGTH = 10  # expected maximum length of move sequences
-EXPECTED_ROWS = 15000000  # expected number of rows, approximately, in the data
-SPLITS_FILE = "splits.json"  # splits file
-VOCAB_FILE = "vocabulary.json"  # vocabulary file
-VAL_SPLIT_FRACTION = 0.85  # marker (% into the data) where the validation split begins
-TEST_SPLIT_FRACTION = (
-    0.925  # marker (% into the data) where the validation split ends / test set begins
-)
-VOCAB_SIZES = get_vocab_sizes(DATA_FOLDER, VOCAB_FILE)
+NAME = "CT-E-20"  # name and identifier for this configuration
 
 ###############################
 ######### Dataloading #########
@@ -45,6 +29,7 @@ PIN_MEMORY = False  # pin to GPU memory when dataloading?
 ############ Model ############
 ###############################
 
+VOCAB_SIZES = get_vocab_sizes(DATA_FOLDER, VOCAB_FILE)  # vocabulary sizes
 D_MODEL = 512  # size of vectors throughout the transformer model
 N_HEADS = 8  # number of heads in the multi-head attention
 D_QUERIES = 64  # size of query vectors (and also the size of the key vectors) in the multi-head attention
@@ -52,20 +37,20 @@ D_VALUES = 64  # size of value vectors in the multi-head attention
 D_INNER = 2048  # an intermediate size in the position-wise FC
 N_LAYERS = 6  # number of layers in the Encoder and Decoder
 DROPOUT = 0.1  # dropout probability
-MAX_MOVE_SEQUENCE_LENGTH_IN_MODEL = 10  # expected maximum length of move sequences
+N_MOVES = 1  # expected maximum length of move sequences in the model, <= MAX_MOVE_SEQUENCE_LENGTH
 DISABLE_COMPILATION = False  # disable model compilation?
 COMPILATION_MODE = "default"  # mode of model compilation (see torch.compile())
 DYNAMIC_COMPILATION = True  # expect tensors with dynamic shapes?
 SAMPLING_K = 1  # k in top-k sampling model predictions during play
-MODEL = ChessTransformer  # custom PyTorch model to train
+MODEL = ChessTransformerEncoder  # custom PyTorch model to train
 
 ###############################
 ########### Training ##########
 ###############################
 
 BATCHES_PER_STEP = (
-    2048 // BATCH_SIZE
-)  # perform a training step, i.e. update parameters, once every so many batches
+    4  # perform a training step, i.e. update parameters, once every so many batches
+)
 PRINT_FREQUENCY = 1  # print status once every so many steps
 N_STEPS = 100000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official transformer repo.
@@ -87,8 +72,8 @@ WRITER = SummaryWriter(log_dir=os.path.join("./logs", NAME))  # tensorboard writ
 ######### Checkpoints #########
 ###############################
 
-CHECKPOINT_FOLDER = "./checkpoints"  # folder containing checkpoints
-TRAINING_CHECKPOINT = None  # path to model checkpoint to resume training, None if none
+CHECKPOINT_FOLDER = "./checkpoints/{}".format(NAME)  # folder containing checkpoints
+TRAINING_CHECKPOINT = NAME + ".pt"  # path to model checkpoint to resume training, None if none
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )

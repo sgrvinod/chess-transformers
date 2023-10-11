@@ -74,21 +74,23 @@ def get_lr(step, d_model, warmup_steps):
     return lr
 
 
-def save_checkpoint(epoch, model, optimizer, config_name, prefix=""):
+def save_checkpoint(epoch, model, optimizer, config_name, checkpoint_folder, prefix=""):
     """
-    Checkpoint saver. Each save overwrites previous save.
+    Checkpoint saver. Each save overwrites any previous save.
 
     Args:
 
-        epoch (int): Epoch number (0-indexed).
+        epoch (int): The epoch number (0-indexed).
 
-        model (torch.nn.Module): Transformer model.
+        model (torch.nn.Module): The transformer model.
 
-        optimizer (torch.optim.adam.Adam): Optimizer.
+        optimizer (torch.optim.adam.Adam): The optimizer.
 
-        config_name (str): Configuration name.
+        config_name (str): The configuration name.
 
-        prefix (str, optional): Checkpoint filename prefix. Defaults to
+        checkpoint_folder (str): The folder where checkpoints must be saved.
+
+        prefix (str, optional): The checkpoint filename prefix. Defaults to
         "".
     """
     state = {
@@ -96,8 +98,10 @@ def save_checkpoint(epoch, model, optimizer, config_name, prefix=""):
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
     }
+    if not os.path.exists(checkpoint_folder):
+        os.makedirs(checkpoint_folder)
     filename = prefix + config_name + ".pt"
-    torch.save(state, filename)
+    torch.save(state, os.path.join(checkpoint_folder, filename))
     print("Checkpoint saved.\n")
 
 

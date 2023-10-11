@@ -1,15 +1,14 @@
-import os
-import json
 import time
 import argparse
 import torch.optim
 import torch.utils.data
 import torch.backends.cudnn as cudnn
-from utils import *
 from tqdm import tqdm
 from importlib import import_module
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
+
+from chess_transformers.train.utils import *
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,6 +31,7 @@ def main(CONFIG):
             h5_file=CONFIG.H5_FILE,
             splits_file=CONFIG.SPLITS_FILE,
             split="train",
+            n_moves=CONFIG.N_MOVES,
         ),
         batch_size=CONFIG.BATCH_SIZE,
         num_workers=CONFIG.NUM_WORKERS,
@@ -45,6 +45,7 @@ def main(CONFIG):
             h5_file=CONFIG.H5_FILE,
             splits_file=CONFIG.SPLITS_FILE,
             split="val",
+            n_moves=CONFIG.N_MOVES,
         ),
         batch_size=CONFIG.BATCH_SIZE,
         num_workers=CONFIG.NUM_WORKERS,
@@ -67,17 +68,13 @@ def main(CONFIG):
 
     # Load checkpoint if available
     if CONFIG.TRAINING_CHECKPOINT is not None:
-        checkpoint = torch.load(CONFIG.TRAINING_CHECKPOINT)
+        checkpoint = torch.load(os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT))
         start_epoch = checkpoint["epoch"] + 1
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print("\nLoaded checkpoint from epoch %d.\n" % start_epoch)
     else:
         start_epoch = 0
-
-    # Loss function
-    criterion = CONFIG.CRITERION(eps=CONFIG.LABEL_SMOOTHING)
-    criterion = criterion.to(DEVICE)
 
     # Compile model
     compiled_model = torch.compile(
@@ -86,6 +83,10 @@ def main(CONFIG):
         dynamic=CONFIG.DYNAMIC_COMPILATION,
         disable=CONFIG.DISABLE_COMPILATION,
     )
+
+    # Loss function
+    criterion = CONFIG.CRITERION(eps=CONFIG.LABEL_SMOOTHING, n_moves=CONFIG.N_MOVES)
+    criterion = criterion.to(DEVICE)
 
     # AMP scaler
     scaler = GradScaler(enabled=CONFIG.USE_AMP)
@@ -121,7 +122,7 @@ def main(CONFIG):
         )
 
         # Save checkpoint
-        save_checkpoint(epoch, model, optimizer, CONFIG.NAME)
+        save_checkpoint(epoch, model, optimizer, CONFIG.NAME, CONFIG.CHECKPOINT_FOLDER)
 
 
 def train(
@@ -166,36 +167,11 @@ def train(
     start_step_time = time.time()
 
     # Batches
-    for i, (
-        turns,
-        white_kingside_castling_rights,
-        white_queenside_castling_rights,
-        black_kingside_castling_rights,
-        black_queenside_castling_rights,
-        can_claim_draw,
-        board_positions,
-        moves,
-        lengths,
-    ) in enumerate(train_loader):
+    for i, batch in enumerate(train_loader):
 
         # Move to default device
-        turns = turns.to(DEVICE)  # (N, 1)
-        white_kingside_castling_rights = white_kingside_castling_rights.to(
-            DEVICE
-        )  # (N, 1)
-        white_queenside_castling_rights = white_queenside_castling_rights.to(
-            DEVICE
-        )  # (N, 1)
-        black_kingside_castling_rights = black_kingside_castling_rights.to(
-            DEVICE
-        )  # (N, 1)
-        black_queenside_castling_rights = black_queenside_castling_rights.to(
-            DEVICE
-        )  # (N, 1)
-        can_claim_draw = can_claim_draw.to(DEVICE)  # (N, 1)
-        board_positions = board_positions.to(DEVICE)  # (N, 64)
-        moves = moves.to(DEVICE)  # (N, max_move_sequence_length + 1)
-        lengths = lengths.squeeze(1).to(DEVICE)  # (N, 1)
+        for key in batch:
+            batch[key] = batch[key].to(DEVICE)
 
         # Time taken to load data
         data_time.update(time.time() - start_data_time)
@@ -203,46 +179,41 @@ def train(
         with torch.autocast(
             device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
         ):
-            # Forward prop. Note: If "max_move_sequence_length" is 8
-            # then the move sequence will be like "<move> a b c <loss>
-            # <pad> <pad> <pad> <pad>" We do not pass the last token to
-            # the Decoder as input (i.e. we left shift)
-            predicted_moves = model(
-                turns=turns,
-                white_kingside_castling_rights=white_kingside_castling_rights,
-                white_queenside_castling_rights=white_queenside_castling_rights,
-                black_kingside_castling_rights=black_kingside_castling_rights,
-                black_queenside_castling_rights=black_queenside_castling_rights,
-                can_claim_draw=can_claim_draw,
-                board_positions=board_positions,
-                moves=moves[:, :-1],
-                lengths=lengths,
-            )  # (N, max_move_sequence_length, move_vocab_size)
+            # Forward prop.
+            predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
+            # Note: n_moves is how many moves into
+            # the future we are targeting for modeling. For an
+            # Encoder-Decoder model, this might be
+            # max_move_sequence_length. For an Encoder-only model, this
+            # will be 1.
 
-            # Loss Note: If max_move_sequence_length is 8 then the move
-            # sequence will be like "<move> a b c <loss> <pad> <pad>
-            # <pad> <pad>" We do not pass the first token as an
-            # "actual_move" as it is not one (i.e. we right shift)
+            # Loss
             loss = criterion(
-                moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
+                predicted_moves=predicted_moves,  # (N, n_moves, move_vocab_size)
+                target_moves=batch["moves"][:, 1:],  # (N, n_moves)
+                lengths=batch["lengths"],  # (N, 1)
             )  # scalar
             loss = loss / CONFIG.BATCHES_PER_STEP
+            # Note: We don't pass the first move (the prompt "<move>")
+            # as it is not a target/next-move of anything
 
         # Backward prop.
         scaler.scale(loss).backward()
 
         # Keep track of losses
-        losses.update(loss.item() * CONFIG.BATCHES_PER_STEP, lengths.sum().item())
+        losses.update(
+            loss.item() * CONFIG.BATCHES_PER_STEP, batch["lengths"].sum().item()
+        )
 
         # Keep track of accuracy
         top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-            logits=predicted_moves[:, 0, :],
-            targets=moves[:, 1],
+            logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
+            targets=batch["moves"][:, 1],  # (N)
             k=[1, 3, 5],
         )
-        top1_accuracies.update(top1_accuracy, moves.shape[0])
-        top3_accuracies.update(top3_accuracy, moves.shape[0])
-        top5_accuracies.update(top5_accuracy, moves.shape[0])
+        top1_accuracies.update(top1_accuracy, predicted_moves.shape[0])
+        top3_accuracies.update(top3_accuracy, predicted_moves.shape[0])
+        top5_accuracies.update(top5_accuracy, predicted_moves.shape[0])
 
         # Update model (i.e. perform a training step) only after
         # gradients are accumulated from batches_per_step batches
@@ -332,6 +303,7 @@ def train(
                     model,
                     optimizer,
                     CONFIG.NAME,
+                    CONFIG.CHECKPOINT_FOLDER,
                     prefix="step" + str(step) + "_",
                 )
 
@@ -366,80 +338,44 @@ def validate(val_loader, model, criterion, epoch, CONFIG):
         top3_accuracies = AverageMeter()  # top-3 accuracy of first move
         top5_accuracies = AverageMeter()  # top-5 accuracy of first move
         # Batches
-        for i, (
-            turns,
-            white_kingside_castling_rights,
-            white_queenside_castling_rights,
-            black_kingside_castling_rights,
-            black_queenside_castling_rights,
-            can_claim_draw,
-            board_positions,
-            moves,
-            lengths,
-        ) in tqdm(enumerate(val_loader), desc="Validating", total=len(val_loader)):
+        for i, batch in tqdm(
+            enumerate(val_loader), desc="Validating", total=len(val_loader)
+        ):
 
             # Move to default device
-            turns = turns.to(DEVICE)  # (N, 1)
-            white_kingside_castling_rights = white_kingside_castling_rights.to(
-                DEVICE
-            )  # (N, 1)
-            white_queenside_castling_rights = white_queenside_castling_rights.to(
-                DEVICE
-            )  # (N, 1)
-            black_kingside_castling_rights = black_kingside_castling_rights.to(
-                DEVICE
-            )  # (N, 1)
-            black_queenside_castling_rights = black_queenside_castling_rights.to(
-                DEVICE
-            )  # (N, 1)
-            can_claim_draw = can_claim_draw.to(DEVICE)  # (N, 1)
-            board_positions = board_positions.to(DEVICE)  # (N, 64)
-            moves = moves.to(DEVICE)  # (N, max_move_sequence_length + 1)
-            lengths = lengths.squeeze(1).to(DEVICE)  # (N)
+            for key in batch:
+                batch[key] = batch[key].to(DEVICE)
 
             with torch.autocast(
-                device_type=DEVICE.type,
-                dtype=torch.float16,
-                enabled=CONFIG.USE_AMP,
+                device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
             ):
-                # Forward prop. Note: If "max_move_sequence_length" is 8
-                # then the move sequence will be like "<move> a b c
-                # <loss> <pad> <pad> <pad> <pad>". We do not pass the
-                # last token to the Decoder as input (i.e. we left
-                # shift)
-                predicted_moves = model(
-                    turns=turns,
-                    white_kingside_castling_rights=white_kingside_castling_rights,
-                    white_queenside_castling_rights=white_queenside_castling_rights,
-                    black_kingside_castling_rights=black_kingside_castling_rights,
-                    black_queenside_castling_rights=black_queenside_castling_rights,
-                    can_claim_draw=can_claim_draw,
-                    board_positions=board_positions,
-                    moves=moves[:, :-1],
-                    lengths=lengths,
-                )  # (N, max_move_sequence_length, move_vocab_size)
+                # Forward prop.
+                predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
+                # Note: n_moves is how many moves into
+                # the future we are targeting for modeling. For an
+                # Encoder-Decoder model, this might be
+                # max_move_sequence_length. For an Encoder-only model, this
+                # will be 1.
 
-                # Loss Note: If max_move_sequence_length is 8 then the
-                # move sequence will be like "<move> a b c <loss> <pad>
-                # <pad> <pad> <pad>". We do not pass the first token as
-                # an "actual_move" as it is not one (i.e. we right
-                # shift)
+                # Loss
                 loss = criterion(
-                    moves=predicted_moves, actual_moves=moves[:, 1:], lengths=lengths
+                    predicted_moves=predicted_moves,  # (N, n_moves, move_vocab_size)
+                    target_moves=batch["moves"][:, 1:],  # (N, n_moves)
+                    lengths=batch["lengths"],  # (N)
                 )  # scalar
 
             # Keep track of losses
-            losses.update(loss.item(), lengths.sum().item())
+            losses.update(loss.item(), batch["lengths"].sum().item())
 
             # Keep track of accuracy
             top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                logits=predicted_moves[:, 0, :],
-                targets=moves[:, 1],
+                logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
+                targets=batch["moves"][:, 1],  # (N)
                 k=[1, 3, 5],
             )
-            top1_accuracies.update(top1_accuracy, moves.shape[0])
-            top3_accuracies.update(top3_accuracy, moves.shape[0])
-            top5_accuracies.update(top5_accuracy, moves.shape[0])
+            top1_accuracies.update(top1_accuracy, predicted_moves.shape[0])
+            top3_accuracies.update(top3_accuracy, predicted_moves.shape[0])
+            top5_accuracies.update(top5_accuracy, predicted_moves.shape[0])
 
         # Log to tensorboard
         CONFIG.WRITER.add_scalar(
@@ -472,7 +408,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module("configs.{}".format(args.config_name))
+    CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
 
     # Train model
     main(CONFIG)

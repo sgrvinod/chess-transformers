@@ -1,8 +1,6 @@
 import math
 import torch
-import argparse
 from torch import nn
-from importlib import import_module
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -12,6 +10,8 @@ DEVICE = torch.device(
 class MultiHeadAttention(nn.Module):
     """
     The Multi-Head Attention sublayer.
+
+    Reused from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Machine-Translation.
     """
 
     def __init__(
@@ -22,20 +22,22 @@ class MultiHeadAttention(nn.Module):
 
         Args:
 
-            d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for this sublayer
+            d_model (int): The size of vectors throughout the
+            transformer model, i.e. input and output sizes for this
+            sublayer.
 
-            n_heads (int): number of heads in the multi-head attention
+            n_heads (int): The number of heads in the multi-head
+            attention.
 
-            d_queries (int): size of query vectors (and also the size of
-            the key vectors)
+            d_queries (int): The size of query vectors (and also the
+            size of the key vectors).
 
-            d_values (int): size of value vectors
+            d_values (int): The size of value vectors.
 
-            dropout (float): dropout probability
+            dropout (float): The dropout probability.
 
-            in_decoder (bool, optional): is this Multi-Head Attention
-            sublayer instance in the Decoder?. Defaults to False.
+            in_decoder (bool, optional): Is this Multi-Head Attention
+            sublayer instance in the Decoder? Defaults to False.
         """
         super(MultiHeadAttention, self).__init__()
 
@@ -76,22 +78,22 @@ class MultiHeadAttention(nn.Module):
 
         Args:
 
-            query_sequences (torch.FloatTensor): the input query
-            sequences, of size (N, query_sequence_pad_length, d_model)
+            query_sequences (torch.FloatTensor): The input query
+            sequences, of size (N, query_sequence_pad_length, d_model).
 
-            key_value_sequences (torch.FloatTensor): the sequences to be
+            key_value_sequences (torch.FloatTensor): The sequences to be
             queried against, of size (N, key_value_sequence_pad_length,
-            d_model)
+            d_model).
 
-            key_value_sequence_lengths (torch.LongTensor): true lengths
-            of the key_value_sequences, to be able to ignore pads, of
-            size (N)
+            key_value_sequence_lengths (torch.LongTensor): The true
+            lengths of the key_value_sequences, to be able to ignore
+            pads, of size (N).
 
         Returns:
 
-            torch.FloatTensor: attention-weighted output sequences for
+            torch.FloatTensor: Attention-weighted output sequences for
             the query sequences, of size (N, query_sequence_pad_length,
-            d_model)
+            d_model).
         """
         batch_size = query_sequences.size(0)  # batch size (N) in number of sequences
         query_sequence_pad_length = query_sequences.size(1)
@@ -258,6 +260,8 @@ class MultiHeadAttention(nn.Module):
 class PositionWiseFCNetwork(nn.Module):
     """
     The Position-Wise Feed Forward Network sublayer.
+
+    Reused from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Machine-Translation.
     """
 
     def __init__(self, d_model, d_inner, dropout):
@@ -266,12 +270,13 @@ class PositionWiseFCNetwork(nn.Module):
 
         Args:
 
-            d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for this sublayer
+            d_model (int): The size of vectors throughout the
+            transformer model, i.e. input and output sizes for this
+            sublayer.
 
-            d_inner (int): an intermediate size
+            d_inner (int): An intermediate size.
 
-            dropout (float): dropout probability
+            dropout (float): The dropout probability.
         """
         super(PositionWiseFCNetwork, self).__init__()
 
@@ -301,13 +306,13 @@ class PositionWiseFCNetwork(nn.Module):
 
         Args:
 
-            sequences (torch.FloatTensor): input sequences, of size (N,
-            pad_length, d_model)
+            sequences (torch.FloatTensor): The input sequences, of size
+            (N, pad_length, d_model).
 
         Returns:
 
-            torch.FloatTensor: transformed output sequences, of size (N,
-            pad_length, d_model)
+            torch.FloatTensor: The transformed output sequences, of size
+            (N, pad_length, d_model).
         """
 
         # Store input for adding later
@@ -333,6 +338,8 @@ class PositionWiseFCNetwork(nn.Module):
 class BoardEncoder(nn.Module):
     """
     The Board Encoder.
+
+    Adapted from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Machine-Translation.
     """
 
     def __init__(
@@ -351,26 +358,28 @@ class BoardEncoder(nn.Module):
 
         Args:
 
-            vocab_sizes (dict): vocabulary sizes of input sequence
-            components
+            vocab_sizes (dict): The vocabulary sizes of input sequence
+            components.
 
-            d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for the Encoder
+            d_model (int): The size of vectors throughout the
+            transformer model, i.e. input and output sizes for the
+            Encoder.
 
-            n_heads (int): number of heads in the multi-head attention
+            n_heads (int): The number of heads in the multi-head
+            attention.
 
-            d_queries (int): size of query vectors (and also the size of
-            the key vectors) in the multi-head attention
+            d_queries (int): The size of query vectors (and also the
+            size of the key vectors) in the multi-head attention.
 
-            d_values (int): size of value vectors in the multi-head
-            attention
+            d_values (int): The size of value vectors in the multi-head
+            attention.
 
-            d_inner (int): an intermediate size in the position-wise FC
+            d_inner (int): An intermediate size in the position-wise FC.
 
-            n_layers (int): number of [multi-head attention +
-            position-wise FC] layers in the Encoder
+            n_layers (int): The number of [multi-head attention +
+            position-wise FC] layers in the Encoder.
 
-            dropout (float): dropout probability
+            dropout (float): The dropout probability.
         """
         super(BoardEncoder, self).__init__()
 
@@ -397,16 +406,13 @@ class BoardEncoder(nn.Module):
         self.black_queenside_castling_rights_embeddings = nn.Embedding(
             vocab_sizes["black_queenside_castling_rights"], d_model
         )
-        self.can_claim_draw_embeddings = nn.Embedding(
-            vocab_sizes["can_claim_draw"], d_model
-        )
         self.board_position_embeddings = nn.Embedding(
             vocab_sizes["board_position"], d_model
         )
 
         # Positional embedding layer
         self.positional_embeddings = nn.Embedding(
-            70,
+            69,
             d_model,
         )
 
@@ -452,7 +458,6 @@ class BoardEncoder(nn.Module):
         white_queenside_castling_rights,
         black_kingside_castling_rights,
         black_queenside_castling_rights,
-        can_claim_draw,
         board_positions,
     ):
         """
@@ -460,30 +465,28 @@ class BoardEncoder(nn.Module):
 
         Args:
 
-            turns (torch.LongTensor): current turn (w/b), of size (N, 1)
+            turns (torch.LongTensor): The current turn (w/b), of size
+            (N, 1).
 
-            white_kingside_castling_rights (torch.LongTensor): whether
-            white can castle kingside, of size (N, 1)
+            white_kingside_castling_rights (torch.LongTensor): Whether
+            white can castle kingside, of size (N, 1).
 
-            white_queenside_castling_rights (torch.LongTensor): whether
-            white can castle queenside, of size (N, 1)
+            white_queenside_castling_rights (torch.LongTensor): Whether
+            white can castle queenside, of size (N, 1).
 
-            black_kingside_castling_rights (torch.LongTensor): whether
-            black can castle kingside, of size (N, 1)
+            black_kingside_castling_rights (torch.LongTensor): Whether
+            black can castle kingside, of size (N, 1).
 
-            black_queenside_castling_rights (torch.LongTensor): whether
-            black can castle queenside, of size (N, 1)
+            black_queenside_castling_rights (torch.LongTensor): Whether
+            black can castle queenside, of size (N, 1).
 
-            can_claim_draw (torch.LongTensor): whether a draw can be
-            claimed in the next move, of size (N, 1)
-
-            board_positions (torch.LongTensor): current board positions,
-            of size (N, 64)
+            board_positions (torch.LongTensor): The current board
+            positions, of size (N, 64).
 
         Returns:
 
-            torch.FloatTensor: encoded board, of size (N,
-            BOARD_STATUS_LENGTH, d_model)
+            torch.FloatTensor: The encoded board, of size (N,
+            BOARD_STATUS_LENGTH, d_model).
         """
         batch_size = turns.size(0)  # N
 
@@ -503,7 +506,6 @@ class BoardEncoder(nn.Module):
                 self.black_queenside_castling_rights_embeddings(
                     black_queenside_castling_rights
                 ),
-                self.can_claim_draw_embeddings(can_claim_draw),
                 self.board_position_embeddings(board_positions),
             ],
             dim=1,
@@ -524,7 +526,7 @@ class BoardEncoder(nn.Module):
             boards = encoder_layer[0](
                 query_sequences=boards,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=torch.LongTensor([70] * batch_size).to(
+                key_value_sequence_lengths=torch.LongTensor([69] * batch_size).to(
                     DEVICE
                 ),
             )  # (N, BOARD_STATUS_LENGTH, d_model)
@@ -541,12 +543,14 @@ class BoardEncoder(nn.Module):
 class MoveDecoder(nn.Module):
     """
     The Move Decoder.
+
+    Adapted from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Machine-Translation.
     """
 
     def __init__(
         self,
         vocab_size,
-        max_move_sequence_length,
+        n_moves,
         d_model,
         n_heads,
         d_queries,
@@ -560,33 +564,36 @@ class MoveDecoder(nn.Module):
 
         Args:
 
-            vocab_size (int): size of the output vocabulary
+            vocab_size (int): The size of the output vocabulary.
 
-            max_move_sequence_length (int): expected maximum length of
-            output (move) sequences
+            n_moves (int): The expected maximum length of output (move)
+            sequences.
 
-            d_model (int): size of vectors throughout the transformer
-            model, i.e. input and output sizes for the Decoder
+            d_model (int): The size of vectors throughout the
+            transformer model, i.e. input and output sizes for the
+            Decoder.
 
-            n_heads (int): number of heads in the multi-head attention
+            n_heads (int): The number of heads in the multi-head
+            attention.
 
-            d_queries (int): size of query vectors (and also the size of
-            the key vectors) in the multi-head attention
+            d_queries (int): The size of query vectors (and also the
+            size of the key vectors) in the multi-head attention.
 
-            d_values (int): size of value vectors in the multi-head
-            attention
+            d_values (int): The size of value vectors in the multi-head
+            attention.
 
-            d_inner (int): an intermediate size in the position-wise FC
+            d_inner (int): An intermediate size in the position-wise FC.
 
-            n_layers (int): number of [multi-head attention + multi-head
-            attention + position-wise FC] layers in the Decoder
+            n_layers (int): The number of [multi-head attention +
+            multi-head attention + position-wise FC] layers in the
+            Decoder.
 
-            dropout (int): dropout probability
+            dropout (int): The dropout probability.
         """
         super(MoveDecoder, self).__init__()
 
         self.vocab_size = vocab_size
-        self.max_move_sequence_length = max_move_sequence_length
+        self.n_moves = n_moves
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_queries = d_queries
@@ -599,7 +606,7 @@ class MoveDecoder(nn.Module):
         self.embeddings = nn.Embedding(vocab_size, d_model)
 
         # Positional embedding layer
-        self.positional_embeddings = nn.Embedding(max_move_sequence_length, d_model)
+        self.positional_embeddings = nn.Embedding(n_moves, d_model)
 
         # Decoder layers
         self.decoder_layers = nn.ModuleList(
@@ -659,32 +666,31 @@ class MoveDecoder(nn.Module):
 
         Args:
 
-            moves (torch.LongTensor): move sequences, of size (N,
-            move_sequence_length)
+            moves (torch.LongTensor): The move sequences, of size (N,
+            n_moves).
 
-            lengths (torch.LongTensor): true lengths of move sequences,
-            not including <move> and <pad> tokens, of size (N, 1)
+            lengths (torch.LongTensor): The true lengths of the move
+            sequences, not including <move> and <pad> tokens, of size
+            (N, 1).
 
-            boards (torch.FloatTensor): encoded boards, from the
-            Encoder, of size (N, BOARD_STATUS_LENGTH, d_model)
+            boards (torch.FloatTensor): The encoded boards, from the
+            Encoder, of size (N, BOARD_STATUS_LENGTH, d_model).
 
         Returns:
 
-            torch.FloatTensor: decoded next-move probabilities, of size
-            (N, move_sequence_length, vocab_size)
+            torch.FloatTensor: The decoded next-move probabilities, of
+            size (N, n_moves, vocab_size).
         """
         batch_size = boards.size(0)  # N
 
         # Embeddings
-        embeddings = self.embeddings(moves)  # (N, max_move_sequence_length, d_model)
+        embeddings = self.embeddings(moves)  # (N, n_moves, d_model)
 
         # Add positional embeddings
         moves = embeddings + self.positional_embeddings.weight.unsqueeze(
             0
-        )  # (N, max_move_sequence_length, d_model)
-        moves = moves * math.sqrt(
-            self.d_model
-        )  # (N, max_move_sequence_length, d_model)
+        )  # (N, n_moves, d_model)
+        moves = moves * math.sqrt(self.d_model)  # (N, n_moves, d_model)
 
         # Dropout
         moves = self.apply_dropout(moves)
@@ -696,255 +702,20 @@ class MoveDecoder(nn.Module):
                 query_sequences=moves,
                 key_value_sequences=moves,
                 key_value_sequence_lengths=lengths,
-            )  # (N, max_move_sequence_length, d_model)
+            )  # (N, n_moves, d_model)
             moves = decoder_layer[1](
                 query_sequences=moves,
                 key_value_sequences=boards,
-                key_value_sequence_lengths=torch.LongTensor([70] * batch_size).to(
+                key_value_sequence_lengths=torch.LongTensor([69] * batch_size).to(
                     DEVICE
                 ),
-            )  # (N, max_move_sequence_length, d_model)
-            moves = decoder_layer[2](
-                sequences=moves
-            )  # (N, max_move_sequence_length, d_model)
+            )  # (N, n_moves, d_model)
+            moves = decoder_layer[2](sequences=moves)  # (N, n_moves, d_model)
 
         # Apply layer-norm
-        moves = self.layer_norm(moves)  # (N, max_move_sequence_length, d_model)
+        moves = self.layer_norm(moves)  # (N, n_moves, d_model)
 
         # Find logits over vocabulary
-        moves = self.fc(moves)  # (N, max_move_sequence_length, vocab_size)
+        moves = self.fc(moves)  # (N, n_moves, vocab_size)
 
         return moves
-
-
-class ChessTransformer(nn.Module):
-    """
-    The Chess Transformer.
-    """
-
-    def __init__(
-        self,
-        CONFIG,
-    ):
-        """
-        Init.
-
-        Args:
-
-            CONFIG (dict): configuration containing the following
-            parameters for the model:
-
-                VOCAB_SIZES (dict): sizes of the vocabularies of the Encoder
-                sequence components and the Decoder (move) sequence
-
-                MAX_MOVE_SEQUENCE_LENGTH_IN_MODEL (int): expected maximum length of
-                output (move) sequences
-
-                D_MODEL (int): size of vectors throughout the transformer
-                model, i.e. input and output sizes for the Encoder and
-                Decoder
-
-                N_HEADS (int): number of heads in the multi-head attention
-
-                D_QUERIES (int): size of query vectors (and also the size of
-                the key vectors) in the multi-head attention
-
-                D_VALUES (int): size of value vectors in the multi-head
-                attention
-
-                D_INNER (int): an intermediate size in the position-wise FC
-
-                N_LAYERS (int): number of [multi-head attention + multi-head
-                attention + position-wise FC] layers in the Encoder and
-                Decoder
-
-                DROPOUT (int): dropout probability
-        """
-        super(ChessTransformer, self).__init__()
-
-        self.vocab_sizes = CONFIG.VOCAB_SIZES
-        self.max_move_sequence_length = CONFIG.MAX_MOVE_SEQUENCE_LENGTH_IN_MODEL
-        self.d_model = CONFIG.D_MODEL
-        self.n_heads = CONFIG.N_HEADS
-        self.d_queries = CONFIG.D_QUERIES
-        self.d_values = CONFIG.D_VALUES
-        self.d_inner = CONFIG.D_INNER
-        self.n_layers = CONFIG.N_LAYERS
-        self.dropout = CONFIG.DROPOUT
-
-        # Encoder
-        self.board_encoder = BoardEncoder(
-            vocab_sizes=self.vocab_sizes,
-            d_model=self.d_model,
-            n_heads=self.n_heads,
-            d_queries=self.d_queries,
-            d_values=self.d_values,
-            d_inner=self.d_inner,
-            n_layers=self.n_layers,
-            dropout=self.dropout,
-        )
-
-        # Decoder
-        self.move_decoder = MoveDecoder(
-            vocab_size=self.vocab_sizes["move_sequence"],
-            max_move_sequence_length=self.max_move_sequence_length,
-            d_model=self.d_model,
-            n_heads=self.n_heads,
-            d_queries=self.d_queries,
-            d_values=self.d_values,
-            d_inner=self.d_inner,
-            n_layers=self.n_layers,
-            dropout=self.dropout,
-        )
-
-        # Initialize weights
-        self.init_weights()
-
-    def init_weights(self):
-        """
-        Initialize weights in the transformer model.
-        """
-        # Glorot uniform initialization with a gain of 1.
-        for p in self.parameters():
-            # Glorot initialization needs at least two dimensions on the
-            # tensor
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p, gain=1.0)
-
-        # For the embeddings, normal initialization with 0 mean and
-        # 1/sqrt(d_model) S.D.
-        nn.init.normal_(
-            self.board_encoder.board_position_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.turn_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.white_kingside_castling_rights_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.white_queenside_castling_rights_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.black_kingside_castling_rights_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.black_queenside_castling_rights_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.can_claim_draw_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.board_encoder.positional_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.move_decoder.embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-        nn.init.normal_(
-            self.move_decoder.positional_embeddings.weight,
-            mean=0.0,
-            std=math.pow(self.d_model, -0.5),
-        )
-
-        # Share weights between the embedding layer in the Decoder and
-        # the logit layer
-        self.move_decoder.fc.weight = self.move_decoder.embeddings.weight
-
-    def forward(
-        self,
-        turns,
-        white_kingside_castling_rights,
-        white_queenside_castling_rights,
-        black_kingside_castling_rights,
-        black_queenside_castling_rights,
-        can_claim_draw,
-        board_positions,
-        moves,
-        lengths,
-    ):
-        """
-        Forward prop.
-
-        Args:
-
-            turns (torch.LongTensor): current turn (w/b), of size (N, 1)
-
-            white_kingside_castling_rights (torch.LongTensor): whether
-            white can castle kingside, of size (N, 1)
-
-            white_queenside_castling_rights (torch.LongTensor): whether
-            white can castle queenside, of size (N, 1)
-
-            black_kingside_castling_rights (torch.LongTensor): whether
-            black can castle kingside, of size (N, 1)
-
-            black_queenside_castling_rights (torch.LongTensor): whether
-            black can castle queenside, of size (N, 1)
-
-            can_claim_draw (torch.LongTensor): whether a draw can be
-            claimed in the next move, of size (N, 1)
-
-            board_positions (torch.LongTensor): current board positions,
-            of size (N, 64)
-
-            moves (torch.LongTensor): move sequences, of size (N,
-            move_sequence_length)
-
-            lengths (torch.LongTensor): true lengths of move sequences,
-            not including <move> and <pad> tokens, of size (N, 1)
-
-        Returns:
-
-            torch.FloatTensor: decoded next-move probabilities, of size
-            (N, move_sequence_length, vocab_size)
-        """
-        # Encoder
-        boards = self.board_encoder(
-            turns,
-            white_kingside_castling_rights,
-            white_queenside_castling_rights,
-            black_kingside_castling_rights,
-            black_queenside_castling_rights,
-            can_claim_draw,
-            board_positions,
-        )  # (N, BOARD_STATUS_LENGTH, d_model)
-
-        # Decoder
-        moves = self.move_decoder(
-            moves, lengths, boards
-        )  # (N, max_move_sequence_length, move_vocab_size)
-
-        return moves
-
-
-if __name__ == "__main__":
-    # Get configuration
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config_name", type=str, help="Name of configuration file.")
-    args = parser.parse_args()
-    CONFIG = import_module("configs.{}".format(args.config_name))
-
-    # Model
-    model = CONFIG.MODEL(CONFIG).to(DEVICE)
-    print(
-        "There are %d learnable parameters in this model."
-        % sum([p.numel() for p in model.parameters()])
-    )
