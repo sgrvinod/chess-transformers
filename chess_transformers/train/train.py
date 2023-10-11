@@ -16,7 +16,7 @@ DEVICE = torch.device(
 cudnn.benchmark = False
 
 
-def main(CONFIG):
+def train(CONFIG):
     """
     Training and validation.
 
@@ -100,7 +100,7 @@ def main(CONFIG):
         step = epoch * len(train_loader) // CONFIG.BATCHES_PER_STEP
 
         # One epoch's training
-        train(
+        train_epoch(
             train_loader=train_loader,
             model=compiled_model,
             criterion=criterion,
@@ -113,7 +113,7 @@ def main(CONFIG):
         )
 
         # One epoch's validation
-        validate(
+        validate_epoch(
             val_loader=val_loader,
             model=compiled_model,
             criterion=criterion,
@@ -125,7 +125,7 @@ def main(CONFIG):
         save_checkpoint(epoch, model, optimizer, CONFIG.NAME, CONFIG.CHECKPOINT_FOLDER)
 
 
-def train(
+def train_epoch(
     train_loader, model, criterion, optimizer, scaler, epoch, epochs, step, CONFIG
 ):
     """
@@ -311,7 +311,7 @@ def train(
         start_data_time = time.time()
 
 
-def validate(val_loader, model, criterion, epoch, CONFIG):
+def validate_epoch(val_loader, model, criterion, epoch, CONFIG):
     """
     One epoch's validation.
 
@@ -411,4 +411,4 @@ if __name__ == "__main__":
     CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
 
     # Train model
-    main(CONFIG)
+    train(CONFIG)
