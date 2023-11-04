@@ -68,7 +68,9 @@ def train(CONFIG):
 
     # Load checkpoint if available
     if CONFIG.TRAINING_CHECKPOINT is not None:
-        checkpoint = torch.load(os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT))
+        checkpoint = torch.load(
+            os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT)
+        )
         start_epoch = checkpoint["epoch"] + 1
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -168,7 +170,6 @@ def train_epoch(
 
     # Batches
     for i, batch in enumerate(train_loader):
-
         # Move to default device
         for key in batch:
             batch[key] = batch[key].to(DEVICE)
@@ -341,7 +342,6 @@ def validate_epoch(val_loader, model, criterion, epoch, CONFIG):
         for i, batch in tqdm(
             enumerate(val_loader), desc="Validating", total=len(val_loader)
         ):
-
             # Move to default device
             for key in batch:
                 batch[key] = batch[key].to(DEVICE)
@@ -408,7 +408,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
+    CONFIG = import_module(
+        "chess_transformers.configs.models.{}".format(args.config_name)
+    )
 
     # Train model
     train(CONFIG)

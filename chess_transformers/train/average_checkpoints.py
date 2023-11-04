@@ -72,7 +72,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
+    CONFIG = import_module(
+        "chess_transformers.configs.models.{}".format(args.config_name)
+    )
 
     # Average checkpoints
     average_checkpoints(

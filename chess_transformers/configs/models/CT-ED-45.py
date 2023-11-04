@@ -72,7 +72,7 @@ WRITER = SummaryWriter(log_dir=os.path.join("./logs", NAME))  # tensorboard writ
 ######### Checkpoints #########
 ###############################
 
-CHECKPOINT_FOLDER = "./checkpoints/{}".format(NAME)  # folder containing checkpoints
+CHECKPOINT_FOLDER = "/home/sgr/projects/chess-transformers/checkpoints/{}".format(NAME)  # folder containing checkpoints
 TRAINING_CHECKPOINT = NAME + ".pt"  # path to model checkpoint to resume training, None if none
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
@@ -102,7 +102,4 @@ LICHESS_LEVELS = {
     7: {"SKILL": 16, "DEPTH": 13, "TIME_CONSTRAINT": 0.500},
     8: {"SKILL": 20, "DEPTH": 22, "TIME_CONSTRAINT": 1.000},
 }  # from https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224
-PGN_FOLDER = "./games"  # folder where games against Stockfish are saved in PGN files
-PGN_FILE = (
-    "LL {} | " + NAME + " {} | GAMES {} |  W {} |  L {} |  D {}.pgn"
-)  # format for PGN files' names
+PGN_FOLDER = "/home/sgr/projects/chess-transformers/eval/games/{}".format(NAME)  # folder where games against Stockfish are saved in PGN files

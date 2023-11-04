@@ -17,7 +17,7 @@ setup(
     download_url="https://github.com/sgrvinod/chess-transformers",
     packages=find_packages(),
     python_requires=">=3.6.0",
-    install_requires=["tables==3.6.1", "torch==2.1.0.dev20230809+cu118", "tqdm==4.64.1"],
+    install_requires=["tables==3.6.1", "torch==2.1.0.dev20230809+cu118", "tqdm==4.64.1", "python-chess==1.999"],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",

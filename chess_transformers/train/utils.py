@@ -176,36 +176,3 @@ def topk_accuracy(logits, targets, k=[1, 3, 5]):
 
         return topk_accuracies
 
-
-def topk_sampling(logits, k=5):
-    """
-    Randomly sample from the multinomial distribution formed by the
-    "top-k" logits only.
-
-    Args:
-
-        logits (torch.FloatTensor): Predicted next-move probabilities,
-        of size (N, move_vocab_size).
-
-        k (int, optional): Value of "k". Defaults to 5.
-
-    Returns:
-
-        torch.LongTensor: Samples (indices), of size (N).
-    """
-    k = min(k, logits.shape[1])
-
-    # Find the kth-highest logit value per row
-    max_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
-
-    # All other logit values must be ignored; they should evaluate to 0
-    # under a softmax op.
-    logits[logits < max_logit_values] = -float("inf")  #  (N, move_vocab_size)
-
-    # Apply softmax
-    probabilities = torch.softmax(logits, dim=1)  #  (N, move_vocab_size)
-
-    # Sample from this multinomial probability distribution
-    samples = torch.multinomial(probabilities, num_samples=1).squeeze(1)  #  (N)
-
-    return samples

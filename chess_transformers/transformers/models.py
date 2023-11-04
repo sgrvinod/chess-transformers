@@ -384,12 +384,15 @@ class ChessTransformerEncoder(nn.Module):
 
         return moves
 
+
 if __name__ == "__main__":
     # Get configuration
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
+    CONFIG = import_module(
+        "chess_transformers.configs.models.{}".format(args.config_name)
+    )
 
     # Model
     model = CONFIG.MODEL(CONFIG).to(DEVICE)

@@ -6,7 +6,6 @@ DEVICE = torch.device(
 )  # CPU isn't really practical here
 
 
-
 class LabelSmoothedCE(torch.nn.Module):
     """
     Cross Entropy loss with label-smoothing as a form of regularization.
@@ -51,7 +50,9 @@ class LabelSmoothedCE(torch.nn.Module):
             scalar.
         """
         # Remove pad-positions and flatten
-        predicted_moves = predicted_moves[self.indices < lengths] # (sum(lengths), vocab_size)
+        predicted_moves = predicted_moves[
+            self.indices < lengths
+        ]  # (sum(lengths), vocab_size)
         target_moves = target_moves[self.indices < lengths]  # (sum(lengths))
 
         # "Smoothed" one-hot vectors for the gold sequences

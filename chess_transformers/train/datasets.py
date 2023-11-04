@@ -65,7 +65,6 @@ class ChessDataset(Dataset):
             self.n_moves = len(self.encoded_table[self.indices[0]]["move_sequence"]) - 1
 
     def __getitem__(self, i):
-
         turns = torch.IntTensor([self.encoded_table[self.indices[i]]["turn"]])
         white_kingside_castling_rights = torch.IntTensor(
             [self.encoded_table[self.indices[i]]["white_kingside_castling_rights"]]
@@ -104,13 +103,16 @@ class ChessDataset(Dataset):
 
     def __len__(self):
         return len(self.indices)
-    
+
+
 if __name__ == "__main__":
     # Get configuration
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module("chess_transformers.configs.models.{}".format(args.config_name))
+    CONFIG = import_module(
+        "chess_transformers.configs.models.{}".format(args.config_name)
+    )
 
     # Dataset
     dataset = ChessDataset(
@@ -118,7 +120,7 @@ if __name__ == "__main__":
         h5_file=CONFIG.H5_FILE,
         splits_file=CONFIG.SPLITS_FILE,
         split="train",
-        n_moves=5
+        n_moves=5,
     )
     print(len(dataset))
     print(dataset[17])
