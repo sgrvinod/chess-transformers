@@ -37,6 +37,19 @@ UNICODE_CHESS_PIECES = {
 
 
 def load_assets(CONFIG):
+    """
+    Load assets for inference. This includes the model and vocabulary.
+
+    Args:
+
+        CONFIG (dict): The configuration of the model.
+
+    Returns:
+
+        torch.nn.Module: The model.
+
+        dict: The vocabulary.
+    """
     # Model
     _model = CONFIG.MODEL(CONFIG).to(DEVICE)
 
@@ -67,6 +80,18 @@ def load_assets(CONFIG):
 
 
 def load_engine(path):
+    """
+    Load a chess engine. Print the available UCI configuration options
+    for the engine.
+
+    Args:
+
+        path (str): The path to the engine file (an executable).
+
+    Returns:
+
+        chess.engine.SimpleEngine: The chess engine.
+    """
     engn = chess.engine.SimpleEngine.popen_uci(path)
 
     # Show options
@@ -97,6 +122,19 @@ def load_engine(path):
 
 
 def get_model_inputs(board, vocabulary):
+    """
+    Get inputs to be fed to a model for predicting the next move.
+
+    Args:
+
+        board (chess.Board): The chessboard in its current state.
+
+        vocabulary (dict): The vocabulary.
+
+    Returns:
+
+        dict: The inputs to be fed to the model.
+    """
     model_inputs = dict()
 
     t, b, wk, wq, bk, bq = parse_fen(board.fen())
@@ -153,15 +191,56 @@ def get_model_inputs(board, vocabulary):
     return model_inputs
 
 
+def capitalize_pawn_promotion_piece(uci_move):
+    """
+    A function that capitalizes the target piece in the UCI notation for
+    a pawn promotion move. For example, "d7d8q" is transformed into
+    "d7d8Q".
+
+    This is done because the move vocabularies for some datasets have
+    the target piece capitalized, but this is not the case in UCI
+    notation. When this is fixed during data preprocessing, this
+    function will no longer be needed.
+
+    Args:
+
+        uci_move (str): The UCI notation of the pawn promotion move.
+
+    Returns:
+
+        _type_: _description_
+    """
+    if len(uci_move) == 5:
+        uci_move = uci_move[:-1] + uci_move[-1].upper()
+
+    return uci_move
+
+
 def get_legal_moves(board, vocabulary):
-    legal_moves = [
-        str(m) for m in board.legal_moves if str(m) in vocabulary["move_sequence"]
-    ]
+    """
+    Get a list of legal moves that can be made on the board in its
+    current state, and are also in the model's vocabulary.
+
+    Args:
+
+        board (chess.Board): The board in its current state.
+
+        vocabulary (vocabulary): The vocabulary.
+
+    Returns:
+
+        list: A list of legal moves.
+    """
+    legal_moves = list()
+    for legal_move in board.legal_moves:
+        legal_move = capitalize_pawn_promotion_piece(str(legal_move))
+        if legal_move in vocabulary["move_sequence"]:
+            legal_moves.append(legal_move)
 
     return legal_moves
 
 
-def topk_sampling(logits, k=5):
+def topk_sampling(logits, k=1):
     """
     Randomly sample from the multinomial distribution formed by the
     "top-k" logits only.
@@ -171,7 +250,7 @@ def topk_sampling(logits, k=5):
         logits (torch.FloatTensor): Predicted next-move probabilities,
         of size (N, move_vocab_size).
 
-        k (int, optional): Value of "k". Defaults to 5.
+        k (int, optional): Value of "k". Defaults to 1.
 
     Returns:
 
@@ -205,6 +284,44 @@ def get_pgn(
     result=None,
     termination=None,
 ):
+    """
+    Create the portable game notation (PGN) for a game represented by a
+    played-out chessboard.
+
+    Args:
+
+        board (chess.Board): The chessboard in its (presumably)
+        played-out state.
+
+        white_player_name (str, optional): The name of the player
+        playing white. Defaults to None, in which case this tag is not
+        included in the PGN.
+
+        black_player_name (str, optional): The name of the player
+        playing black. Defaults to None, in which case this tag is not
+        included in the PGN.
+
+        event (str, optional): The name of the event at which the game
+        is being played. Defaults to None, in which case this tag is not
+        included in the PGN.
+
+        round (str, optional): The round number/name. Defaults to None,
+        in which case this tag is not included in the PGN.
+
+        time_control (str, optional): The time control used for this
+        game. Defaults to "?", for unknown time control.
+
+        result (str, optional): The result of the game. Defaults to
+        None, in which case the result is inferred from the board.
+
+        termination (str, optional): The termination type for the game.
+        Defaults to None, in which case the termination is inferred from
+        the board as either "normal" or "unterminated".
+
+    Returns:
+
+        str: The PGN for this game.
+    """
     game = chess.pgn.Game.from_board(board)
 
     if white_player_name is not None:
@@ -237,7 +354,17 @@ def get_pgn(
 
 
 def print_board(board):
-    # Get coordinates (flattened index) for the "from" and "to" squares of the last move
+    """
+    Display a visual representation of the chessboard in its current
+    state in a terminal, as an alternative to python-chess's native
+    printing.
+
+    Args:
+
+        board (chess.Board): The chessboard in its current state.
+    """
+    # Get coordinates (flattened index) for the "from" and "to" squares
+    # of the last move
     last_move = board.peek()
     from_rank_idx = chess.square_rank(last_move.from_square)
     from_file_idx = chess.square_file(last_move.from_square)
@@ -286,6 +413,14 @@ def print_board(board):
 
 
 def in_notebook():
+    """
+    Is this function being called in an IPython notebook, as opposed to
+    a terminal?
+
+    Returns:
+
+        bool: Is it?
+    """
     try:
         from IPython import get_ipython
 
@@ -299,6 +434,13 @@ def in_notebook():
 
 
 def print_text(md):
+    """
+    Print markdown-formatted text as plain text in a terminal.
+
+    Args:
+
+        md (str): The markdown-formatted text.
+    """
     html = markdown.markdown(md)
     text = "\n".join(BeautifulSoup(html, features="lxml").findAll(text=True))
 
@@ -306,12 +448,25 @@ def print_text(md):
 
 
 def write_pgns(pgns, pgn_file):
+    """
+    Write PGNs to a file.
+
+    Args:
+
+        pgns (str): The PGNs.
+
+        pgn_file (str): The path to write as a file.
+    """
     with open(pgn_file, "w") as f:
         f.write(pgns)
 
 
 @contextmanager
 def suppress_stdouterr():
+    """
+    A context manager for suppressing standard output (stdout) and
+    standard error (stderr).
+    """
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         sys.stdout = devnull

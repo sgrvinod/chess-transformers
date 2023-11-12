@@ -8,12 +8,10 @@ from chess_transformers.play.exceptions import (
     ClockAlreadyStarted,
 )
 
+
 class ChessClock:
     """
     A clock implementing Fischer time control.
-
-    Note that upon running out of time, a player is alerted only when
-    attempting to make a move. Threading is not implemented.
     """
 
     def __init__(
@@ -33,7 +31,13 @@ class ChessClock:
 
             increment (int): The time increment per move, in seconds.
 
-            verbose (bool, optional): Print clock status on each move?
+            white_player_name (str, optional): The name of the player
+            playing white. Defaults to "White".
+
+            black_player_name (str, optional): The name of the player
+            playing black. Defaults to "Black".
+
+            verbose (bool, optional): Print clock status on each action?
             Defaults to True.
         """
         self.base_time = base_time
@@ -87,14 +91,31 @@ class ChessClock:
                 self.white_player if self._white_to_move else self.black_player,
             ),
         )
-        signal.setitimer(signal.ITIMER_REAL, self._white_time if self._white_to_move else self._black_time)
+        signal.setitimer(
+            signal.ITIMER_REAL,
+            self._white_time if self._white_to_move else self._black_time,
+        )
         self._last_tap = time.time()
         if self.verbose:
             _, __ = self.status()
 
     def status(self, verbose=True):
         """
-        Print time remaining for both players.
+        Show time remaining for both players.
+
+        Args:
+
+            verbose (bool, optional): Print the time remaining in
+            addition to returning it? (The clock's verbosity must also
+            be set to True during initialization.) Defaults to True.
+
+        Returns:
+
+            float: The time remaining for the player playing white, in
+            seconds
+
+            float: The time remaining for the player playing black, in
+            seconds
         """
         _white_time = max(
             self._white_time
@@ -111,17 +132,21 @@ class ChessClock:
 
         if self.verbose and verbose:
             print(
-                "\nTime remaining for {}: {:.2f}s".format(self.white_player, _white_time),
+                "\nTime remaining for {}: {:.2f}s".format(
+                    self.white_player, _white_time
+                ),
             )
             print(
-                "Time remaining for {}: {:.2f}s\n".format(self.black_player, _black_time)
+                "Time remaining for {}: {:.2f}s\n".format(
+                    self.black_player, _black_time
+                )
             )
 
         return _white_time, _black_time
 
     def stop(self):
         if self._started:
-            signal.setitimer(signal.ITIMER_REAL, 0) 
+            signal.setitimer(signal.ITIMER_REAL, 0)
 
     def reset(self):
         """

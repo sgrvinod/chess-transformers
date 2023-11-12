@@ -28,22 +28,58 @@ def model_v_engine(
     event=None,
 ):
     """
-    Have the model play a game against the Stockfish engine.
+    Have the model play a game against a chess engine.
 
     Args:
+
+        model (torch.nn.Module): The model.
+
+        vocabulary (dict): The vocabulary.
 
         k (int): The "k" in "top-k" sampling, for sampling the model's
         predicted moves.
 
-        engine (chess.engine.SimpleEngine): The Stockfish engine.
+        use_amp (bool): Use automatic mixed precision?
 
-        time_limit (int): Maximum thinking time per move, in seconds.
+        model_color (str): The color played by the model, one of "w" or
+        "b".
 
-        depth_limit (int): Maximum depth allowed per move.
+        engine (chess.engine.SimpleEngine): The chess engine.
+
+        time_limit (float, optional): Maximum thinking time per move, in
+        seconds. Defaults to None.
+
+        depth_limit (int, optional): Maximum depth allowed per move.
+        Defaults to None.
+
+        uci_options (dict, optional): UCI options to pass to the chess
+        engine. Defaults to an empty dictionary, or no options.
+
+        rounds (int, optional): The number of rounds/games to play.
+        Defaults to 1, or a single game.
+
+        clock (chess_transformers.play.clocks.ChessClock, optional): A
+        clock set to a time control. Defaults to None, for no time
+        control.
+
+        white_player_name (str, optional): The name of the player
+        playing white. Defaults to "White".
+
+        black_player_name (str, optional): The name of the player
+        playing black. Defaults to "Black".
+
+        event (str, optional): The name of the event this/these game(s)
+        are being played at. Defaults to None.
 
     Returns:
 
-        chess.Board: The played-out chessboard at the end of the game.
+        int: The number of rounds won by the model.
+
+        int: The number of rounds lost by the model.
+
+        int: The number of rounds drawn.
+
+        str: The rounds player in PGN format.
     """
     # Set UCI options
     engine.configure(uci_options)
@@ -196,22 +232,52 @@ def model_v_model(
     event=None,
 ):
     """
-    Have the model play a game against the Stockfish engine.
+    Have a model play a game against another model.
 
     Args:
 
-        k (int): The "k" in "top-k" sampling, for sampling the model's
-        predicted moves.
+        model_w (torch.nn.Module): The model playing white.
 
-        engine (chess.engine.SimpleEngine): The Stockfish engine.
+        vocabulary_w (dict): The vocabulary for the model playing white.
 
-        time_limit (int): Maximum thinking time per move, in seconds.
+        k_w (int): The "k" in "top-k" sampling, for sampling the
+        predicted moves of the model playing white.
 
-        depth_limit (int): Maximum depth allowed per move.
+        use_amp_w (bool): Use automatic mixed precision for the model
+        playing white?
+
+        model_b (torch.nn.Module): The model playing black.
+
+        vocabulary_b (dict): The vocabulary for the model playing black.
+
+        k_b (int): The "k" in "top-k" sampling, for sampling the
+        predicted moves of the model playing black.
+
+        use_amp_b (bool): Use automatic mixed precision for the model
+        playing black?
+
+        rounds (int, optional): The number of rounds/games to play.
+        Defaults to 1, or a single game.
+
+        white_player_name (str, optional): The name of the model playing
+        white. Defaults to "White".
+
+        black_player_name (str, optional): The name of the model playing
+        black. Defaults to "Black".
+
+        event (str, optional): The name of the event this/these game(s)
+        are being played at. Defaults to None.
+
 
     Returns:
 
-        chess.Board: The played-out chessboard at the end of the game.
+        int: The number of rounds won by the model playing white.
+
+        int: The number of rounds won by the model playing black.
+
+        int: The number of rounds drawn.
+
+        str: The rounds player in PGN format.
     """
     # Play
     pgns = list()
@@ -269,6 +335,18 @@ def model_v_model(
 
 
 def warm_up(model, vocabulary):
+    """
+    Warm up a model by having it play a game against itself.
+
+    This is done to trigger the much-longer-than-usual first run of the
+    model, where compilation takes place.
+
+    Args:
+
+        model (torch.nn.Module): The model
+
+        vocabulary (dict): The vocabulary.
+    """
     with io.capture_output():
         _ = model_v_model(
             model_w=model,

@@ -19,17 +19,20 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def model_move(model, board, vocabulary, use_amp, k):
     """
-    Have the model make the next move at the given board position.
+    Have the model make the next move on the board.
 
     Args:
 
+        model (torch.nn.Module): The model.
+
         board (chess.Board): The chessboard in its current state.
+
+        vocabulary (dict): The vocabulary.
+
+        use_amp (bool): Use automatic mixed precision?
 
         k (int): The "k" in "top-k" sampling, for sampling the model's
         predicted moves.
-
-        msg (str, optional): A message to be displayed with the board,
-        if any. Defaults to None.
 
     Returns:
 
@@ -60,14 +63,14 @@ def model_move(model, board, vocabulary, use_amp, k):
         model_move = legal_moves[legal_move_index]
 
         # Move
-        board.push_uci(model_move)
+        board.push_uci(model_move.lower())
         clear_output(wait=True)
         display(board) if in_notebook() else print_board(board)
 
         return board
 
 
-def stockfish_move(
+def engine_move(
     board,
     engine,
     time_limit=None,
@@ -78,27 +81,35 @@ def stockfish_move(
     black_inc=None,
 ):
     """
-    Have the Stockfish engine make the next move at the given board
-    position.
+    Have an engine make the next move at the given board position.
 
     Args:
 
         board (chess.Board): The chessboard in its current state.
 
-        engine (chess.engine.SimpleEngine): The Stockfish engine.
+        engine (chess.engine.SimpleEngine): The chess engine.
 
-        time_limit (int): Maximum thinking time per move, in seconds.
+        time_limit (float, optional): Maximum thinking time per move, in
+        seconds. Defaults to None.
+
+        depth_limit (int, optional): Maximum depth allowed per move.
         Defaults to None.
 
-        depth_limit (int): Maximum depth allowed per move. Defaults to
-        None.
+        white_clock (float, optional): Time remaining on the clock of
+        the player playing white, in seconds. Defaults to None.
 
-        msg (str, optional): A message to be displayed with the board,
-        if any. Defaults to None.
+        black_clock (float, optional): Time remaining on the clock of
+        the player playing black, in seconds. Defaults to None.
+
+        white_inc (float, optional): The increment per move on the clock
+        of the player playing white, in seconds. Defaults to None.
+
+        black_inc (float, optional): The increment per move on the clock
+        of the player playing black, in seconds. Defaults to None.
 
     Returns:
 
-        chess.Board: The chessboard after the model makes its move.
+        chess.Board: The chessboard after the engine makes its move.
     """
     result = engine.play(
         board,
@@ -119,7 +130,7 @@ def stockfish_move(
     return board
 
 
-def make_human_move(board):
+def human_move(board):
     """
     Have the human make the next move at the given board position.
 
@@ -131,12 +142,15 @@ def make_human_move(board):
 
         chess.Board: The chessboard after the human makes their move.
 
-        str, NoneType: The outcome of the move, if the game ends with this move.
+        str, NoneType: The outcome of the move, if the game ends with
+        this move.
     """
     legal_moves = [m.uci() for m in board.legal_moves]
 
     while True:
-        human_move = input("What move would you like to play? (UCI notation; 'exit', 'resign', 'draw' are options.)")
+        human_move = input(
+            "What move would you like to play? (UCI notation; 'exit', 'resign', 'draw' are options.)"
+        )
 
         if human_move in legal_moves:
             board.push_uci(human_move)
@@ -151,21 +165,21 @@ def make_human_move(board):
                 display(board) if in_notebook() else print_board(board)
                 return board, "0-1" if board.turn else "1-0"
             return board, None
-        
+
         # If the human wishes to stop playing
         if human_move.lower() == "exit":
             clear_output(wait=True)
             display(Markdown("# You stopped playing."))
             display(board)
             return board, "0-1" if board.turn else "1-0"
-        
+
         # If the human wishes to resign
         if human_move.lower() == "resign":
             clear_output(wait=True)
             display(Markdown("# You resigned."))
             display(board)
             return board, "0-1" if board.turn else "1-0"
-        
+
         # If the human wishes to claim a draw
         if human_move.lower() == "draw":
             if board.can_claim_draw():
@@ -178,7 +192,7 @@ def make_human_move(board):
                 display(Markdown("# You can't claim a draw right now."))
                 display(board)
 
-        # If it isn't a legal move     
+        # If it isn't a legal move
         else:
             clear_output(wait=True)
             display(Markdown("# ***%s*** isn't a valid move." % human_move))

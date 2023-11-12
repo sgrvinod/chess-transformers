@@ -8,7 +8,8 @@
 
 This repository contains code for training transformer models to play chess based on human games from [Lichess](https://lichess.org/). 
 
-## Installation
+
+## Install
 
 To install, clone this repository and install as a Python package locally in editable mode. 
 
@@ -18,6 +19,11 @@ cd chess-transformers
 pip install -e .
 ```
 
+## Play
+
+## Train
+
+## Contribute
 
 
 
