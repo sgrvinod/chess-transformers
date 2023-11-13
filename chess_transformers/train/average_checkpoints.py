@@ -1,8 +1,9 @@
 import os
 import torch
 import argparse
-from importlib import import_module
 from collections import OrderedDict
+
+from chess_transformers.configs import import_config
 
 
 def average_checkpoints(
@@ -72,9 +73,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module(
-        "chess_transformers.configs.models.{}".format(args.config_name)
-    )
+    CONFIG = import_config(args.config_name)
 
     # Average checkpoints
     average_checkpoints(

@@ -1,7 +1,8 @@
 *.pt
 *.pyc
-__pycache__
-.vscode
-logs
-checkpoints
 *.egg-info
+
+logs
+.vscode
+__pycache__
+checkpoints

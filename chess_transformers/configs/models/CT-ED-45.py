@@ -1,6 +1,5 @@
 import os
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 from chess_transformers.configs.data.LE1222 import *
 from chess_transformers.train.datasets import ChessDataset
@@ -66,14 +65,18 @@ BOARD_STATUS_LENGTH = 70  # total length of input sequence
 USE_AMP = True  # use automatic mixed precision training?
 CRITERION = LabelSmoothedCE  # training criterion (loss)
 OPTIMIZER = torch.optim.Adam  # optimizer
-WRITER = SummaryWriter(log_dir=os.path.join("./logs", NAME))  # tensorboard writer
+LOGS_DIR = os.path.join(os.environ["CT_LOGS_FOLDER"], NAME)  # logs folder
 
 ###############################
 ######### Checkpoints #########
 ###############################
 
-CHECKPOINT_FOLDER = "/home/sgr/projects/chess-transformers/checkpoints/{}".format(NAME)  # folder containing checkpoints
-TRAINING_CHECKPOINT = NAME + ".pt"  # path to model checkpoint to resume training, None if none
+CHECKPOINT_FOLDER = os.path.join(
+    os.environ["CT_CHECKPOINTS_FOLDER"], NAME
+)  # folder containing checkpoints
+TRAINING_CHECKPOINT = (
+    NAME + ".pt"
+)  # path to model checkpoint to resume training, None if none
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )
@@ -88,10 +91,10 @@ FINAL_CHECKPOINT = (
 ########## Stockfish ##########
 ###############################
 
-STOCKFISH_PATH = (
-    "/home/sgr/projects/stockfish/src/stockfish"  # path to Stockfish engine
-)
-FAIRY_STOCKFISH_PATH = "/home/sgr/projects/fairy-stockfish/fairy-stockfish-largeboard_x86-64"  # path to Fairy Stockfish engine
+STOCKFISH_PATH = os.environ["CT_STOCKFISH_PATH"]  # path to Stockfish engine
+FAIRY_STOCKFISH_PATH = os.environ[
+    "CT_FAIRY_STOCKFISH_PATH"
+]  # path to Fairy Stockfish engine
 LICHESS_LEVELS = {
     1: {"SKILL": -9, "DEPTH": 5, "TIME_CONSTRAINT": 0.050},
     2: {"SKILL": -5, "DEPTH": 5, "TIME_CONSTRAINT": 0.100},
@@ -102,4 +105,6 @@ LICHESS_LEVELS = {
     7: {"SKILL": 16, "DEPTH": 13, "TIME_CONSTRAINT": 0.500},
     8: {"SKILL": 20, "DEPTH": 22, "TIME_CONSTRAINT": 1.000},
 }  # from https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224
-PGN_FOLDER = "/home/sgr/projects/chess-transformers/eval/games/{}".format(NAME)  # folder where games against Stockfish are saved in PGN files
+EVAL_GAMES_FOLDER = os.path.join(
+    os.environ["CT_EVAL_GAMES_FOLDER"], NAME
+)  # folder where games against Stockfish are saved in PGN files

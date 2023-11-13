@@ -3,12 +3,14 @@ import argparse
 import torch.optim
 import torch.utils.data
 import torch.backends.cudnn as cudnn
+
 from tqdm import tqdm
-from importlib import import_module
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from chess_transformers.train.utils import *
+from chess_transformers.configs import import_config
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -24,6 +26,8 @@ def train(CONFIG):
 
         CONFIG (dict): Configuration. See ./configs.
     """
+    writer = SummaryWriter(log_dir=CONFIG.LOGS_FOLDER)
+
     # Initialize data-loaders
     train_loader = DataLoader(
         dataset=CONFIG.DATASET(
@@ -111,6 +115,7 @@ def train(CONFIG):
             epoch=epoch,
             epochs=epochs,
             step=step,
+            writer=writer,
             CONFIG=CONFIG,
         )
 
@@ -120,6 +125,7 @@ def train(CONFIG):
             model=compiled_model,
             criterion=criterion,
             epoch=epoch,
+            writer=writer,
             CONFIG=CONFIG,
         )
 
@@ -128,7 +134,16 @@ def train(CONFIG):
 
 
 def train_epoch(
-    train_loader, model, criterion, optimizer, scaler, epoch, epochs, step, CONFIG
+    train_loader,
+    model,
+    criterion,
+    optimizer,
+    scaler,
+    epoch,
+    epochs,
+    step,
+    writer,
+    CONFIG,
 ):
     """
     One epoch's training.
@@ -151,6 +166,8 @@ def train_epoch(
         epochs (int): Total number of epochs.
 
         step (int): Step number.
+
+        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard writer.
 
         CONFIG (dict): Configuration.
     """
@@ -261,31 +278,31 @@ def train_epoch(
                 )
 
             # Log to tensorboard
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/loss", scalar_value=losses.val, global_step=step
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/lr",
                 scalar_value=optimizer.param_groups[0]["lr"],
                 global_step=step,
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/data_time", scalar_value=data_time.val, global_step=step
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/step_time", scalar_value=step_time.val, global_step=step
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/top1_accuracy",
                 scalar_value=top1_accuracies.val,
                 global_step=step,
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/top3_accuracy",
                 scalar_value=top3_accuracies.val,
                 global_step=step,
             )
-            CONFIG.WRITER.add_scalar(
+            writer.add_scalar(
                 tag="train/top5_accuracy",
                 scalar_value=top5_accuracies.val,
                 global_step=step,
@@ -312,7 +329,7 @@ def train_epoch(
         start_data_time = time.time()
 
 
-def validate_epoch(val_loader, model, criterion, epoch, CONFIG):
+def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
     """
     One epoch's validation.
 
@@ -326,6 +343,8 @@ def validate_epoch(val_loader, model, criterion, epoch, CONFIG):
         criterion (torch.nn.Module): Loss criterion.
 
         epoch (int): Epoch number.
+
+        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard writer.
 
         CONFIG (dict): Configuration.
     """
@@ -378,20 +397,20 @@ def validate_epoch(val_loader, model, criterion, epoch, CONFIG):
             top5_accuracies.update(top5_accuracy, predicted_moves.shape[0])
 
         # Log to tensorboard
-        CONFIG.WRITER.add_scalar(
+        writer.add_scalar(
             tag="val/loss", scalar_value=losses.avg, global_step=epoch + 1
         )
-        CONFIG.WRITER.add_scalar(
+        writer.add_scalar(
             tag="val/top1_accuracy",
             scalar_value=top1_accuracies.avg,
             global_step=epoch + 1,
         )
-        CONFIG.WRITER.add_scalar(
+        writer.add_scalar(
             tag="val/top3_accuracy",
             scalar_value=top3_accuracies.avg,
             global_step=epoch + 1,
         )
-        CONFIG.WRITER.add_scalar(
+        writer.add_scalar(
             tag="val/top5_accuracy",
             scalar_value=top5_accuracies.avg,
             global_step=epoch + 1,
@@ -408,9 +427,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module(
-        "chess_transformers.configs.models.{}".format(args.config_name)
-    )
+    CONFIG = import_config(args.config_name)
 
     # Train model
     train(CONFIG)

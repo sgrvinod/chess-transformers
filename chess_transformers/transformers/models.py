@@ -2,8 +2,8 @@ import math
 import torch
 import argparse
 from torch import nn
-from importlib import import_module
 
+from chess_transformers.configs import import_config
 from chess_transformers.transformers.modules import BoardEncoder, MoveDecoder
 
 DEVICE = torch.device(
@@ -390,9 +390,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module(
-        "chess_transformers.configs.models.{}".format(args.config_name)
-    )
+    CONFIG = import_config(args.config_name)
 
     # Model
     model = CONFIG.MODEL(CONFIG).to(DEVICE)

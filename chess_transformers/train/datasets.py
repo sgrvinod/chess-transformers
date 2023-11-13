@@ -3,9 +3,9 @@ import json
 import torch
 import argparse
 import tables as tb
-from importlib import import_module
 from torch.utils.data import Dataset
 
+from chess_transformers.configs import import_config
 
 class ChessDataset(Dataset):
     def __init__(self, data_folder, h5_file, splits_file, split, n_moves=None):
@@ -110,9 +110,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module(
-        "chess_transformers.configs.models.{}".format(args.config_name)
-    )
+    CONFIG = import_config(args.config_name)
 
     # Dataset
     dataset = ChessDataset(

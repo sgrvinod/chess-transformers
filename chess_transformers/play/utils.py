@@ -365,13 +365,16 @@ def print_board(board):
     """
     # Get coordinates (flattened index) for the "from" and "to" squares
     # of the last move
-    last_move = board.peek()
-    from_rank_idx = chess.square_rank(last_move.from_square)
-    from_file_idx = chess.square_file(last_move.from_square)
-    from_square_idx = (8 - (from_rank_idx + 1)) * 8 + from_file_idx
-    to_rank_idx = chess.square_rank(last_move.to_square)
-    to_file_idx = chess.square_file(last_move.to_square)
-    to_square_idx = (8 - (to_rank_idx + 1)) * 8 + to_file_idx
+    try:
+        last_move = board.peek()
+        from_rank_idx = chess.square_rank(last_move.from_square)
+        from_file_idx = chess.square_file(last_move.from_square)
+        from_square_idx = (8 - (from_rank_idx + 1)) * 8 + from_file_idx
+        to_rank_idx = chess.square_rank(last_move.to_square)
+        to_file_idx = chess.square_file(last_move.to_square)
+        to_square_idx = (8 - (to_rank_idx + 1)) * 8 + to_file_idx
+    except IndexError:
+        from_square_idx, to_square_idx = None, None
 
     # Check for check or checkmate
     is_check = board.is_check()
@@ -442,7 +445,7 @@ def print_text(md):
         md (str): The markdown-formatted text.
     """
     html = markdown.markdown(md)
-    text = "\n".join(BeautifulSoup(html, features="lxml").findAll(text=True))
+    text = "\n" + "".join(BeautifulSoup(html, features="lxml").findAll(text=True))
 
     print(text)
 

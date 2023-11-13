@@ -17,7 +17,16 @@ from chess_transformers.play.utils import (
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def model_move(model, board, vocabulary, use_amp, k):
+def model_move(
+    model,
+    board,
+    vocabulary,
+    use_amp,
+    k,
+    model_name=None,
+    opponent_name=None,
+    show_board=True,
+):
     """
     Have the model make the next move on the board.
 
@@ -33,6 +42,15 @@ def model_move(model, board, vocabulary, use_amp, k):
 
         k (int): The "k" in "top-k" sampling, for sampling the model's
         predicted moves.
+
+        model_name (str, optional): The name of the model, for
+        displaying in status messages. Defaults to None.
+
+        opponent_name (str, optional): The name of the model's opponent,
+        for displaying in status messages. Defaults to None.
+
+        show_board (bool, optional): Display the board (along with a
+        status message) upon making the move?
 
     Returns:
 
@@ -64,8 +82,21 @@ def model_move(model, board, vocabulary, use_amp, k):
 
         # Move
         board.push_uci(model_move.lower())
-        clear_output(wait=True)
-        display(board) if in_notebook() else print_board(board)
+        if show_board:
+            clear_output(wait=True)
+            if opponent_name and len(board.move_stack) > 1:
+                msg = "# {} played ***{}***. {} plays ***{}***.".format(
+                    opponent_name,
+                    board.move_stack[-2],
+                    model_name if model_name else "Model",
+                    board.move_stack[-1],
+                )
+            else:
+                msg = "# {} plays ***{}***.".format(
+                    model_name if model_name else "Model", board.move_stack[-1]
+                )
+            display(Markdown(msg)) if in_notebook() else print_text(msg)
+            display(board) if in_notebook() else print_board(board)
 
         return board
 
@@ -79,6 +110,9 @@ def engine_move(
     black_clock=None,
     white_inc=None,
     black_inc=None,
+    engine_name=None,
+    opponent_name=None,
+    show_board=True,
 ):
     """
     Have an engine make the next move at the given board position.
@@ -107,6 +141,15 @@ def engine_move(
         black_inc (float, optional): The increment per move on the clock
         of the player playing black, in seconds. Defaults to None.
 
+        engine_name (str, optional): The name of the engine, for
+        displaying in status messages. Defaults to None.
+
+        opponent_name (str, optional): The name of the engine's
+        opponent, for displaying in status messages. Defaults to None.
+
+        show_board (bool, optional): Display the board (along with a
+        status message) upon making the move?
+
     Returns:
 
         chess.Board: The chessboard after the engine makes its move.
@@ -122,15 +165,31 @@ def engine_move(
             black_inc=black_inc,
         ),
     )
-    stockfish_move = result.move
-    board.push(stockfish_move)
-    clear_output(wait=True)
-    display(board) if in_notebook() else print_board(board)
+    engine_move = result.move
+    board.push(engine_move)
+    if show_board:
+        clear_output(wait=True)
+        if opponent_name and len(board.move_stack) > 1:
+            msg = "# {} played ***{}***. {} plays ***{}***.".format(
+                opponent_name,
+                board.move_stack[-2],
+                engine_name if engine_name else "Engine",
+                board.move_stack[-1],
+            )
+        else:
+            msg = "# {} plays {}.".format(
+                engine_name if engine_name else "Model", board.move_stack[-1]
+            )
+        display(Markdown(msg)) if in_notebook() else print_text(msg)
+        display(board) if in_notebook() else print_board(board)
 
     return board
 
 
-def human_move(board):
+def human_move(
+    board,
+    msg,
+):
     """
     Have the human make the next move at the given board position.
 
@@ -138,62 +197,66 @@ def human_move(board):
 
         board (chess.Board): The chessboard in its current state.
 
+        msg (chess.Board): A message to display with the chessboard.
+
     Returns:
 
         chess.Board: The chessboard after the human makes their move.
 
-        str, NoneType: The outcome of the move, if the game ends with
-        this move.
+        str, NoneType: A declared result due to an end to the game being
+        declared by the human, such as when the human abandons, resigns,
+        or claims a draw. None if none.
     """
     legal_moves = [m.uci() for m in board.legal_moves]
-
     while True:
+        clear_output(wait=True)
+        display(Markdown(msg)) if in_notebook() else print_text(msg)
+        display(board) if in_notebook() else print_board(board)
         human_move = input(
-            "What move would you like to play? (UCI notation; 'exit', 'resign', 'draw' are options.)"
+            "What move would you like to play? Enter in UCI notation, or 'exit' / 'resign' / 'draw': "
         )
-
         if human_move in legal_moves:
             board.push_uci(human_move)
-            clear_output(wait=True)
-            msg = " # You played ***%s***." % human_move
-            display(Markdown(msg)) if in_notebook() else print_text(msg)
-            display(board) if in_notebook() else print_board(board)
-            if board.is_checkmate():
+            if in_notebook():
                 clear_output(wait=True)
-                msg = "# You played ***%s***. You win! :(" % human_move
+                msg = "# You played ***{}***.".format(human_move)
                 display(Markdown(msg)) if in_notebook() else print_text(msg)
                 display(board) if in_notebook() else print_board(board)
-                return board, "0-1" if board.turn else "1-0"
+            if board.is_checkmate():
+                clear_output(wait=True)
+                msg = "# You played ***{}***. You win! :(".format(human_move)
+                display(Markdown(msg)) if in_notebook() else print_text(msg)
+                display(board) if in_notebook() else print_board(board)
             return board, None
 
         # If the human wishes to stop playing
-        if human_move.lower() == "exit":
+        elif human_move.lower() == "exit":
             clear_output(wait=True)
-            display(Markdown("# You stopped playing."))
-            display(board)
+            msg = "# You stopped playing."
+            display(Markdown(msg)) if in_notebook() else print_text(msg)
+            display(board) if in_notebook() else print_board(board)
             return board, "0-1" if board.turn else "1-0"
 
         # If the human wishes to resign
-        if human_move.lower() == "resign":
+        elif human_move.lower() == "resign":
             clear_output(wait=True)
-            display(Markdown("# You resigned."))
-            display(board)
+            msg = "# You resigned."
+            display(Markdown(msg)) if in_notebook() else print_text(msg)
+            display(board) if in_notebook() else print_board(board)
             return board, "0-1" if board.turn else "1-0"
 
         # If the human wishes to claim a draw
-        if human_move.lower() == "draw":
+        elif human_move.lower() == "draw":
+            clear_output(wait=True)
             if board.can_claim_draw():
-                clear_output(wait=True)
-                display(Markdown("# You claimed a draw."))
-                display(board)
+                msg = "# You claimed a draw."
+                display(Markdown(msg)) if in_notebook() else print_text(msg)
+                display(board) if in_notebook() else print_board(board)
                 return board, "1/2-1/2"
             else:
-                clear_output(wait=True)
-                display(Markdown("# You can't claim a draw right now."))
-                display(board)
+                msg = "# You can't claim a draw right now."
 
         # If it isn't a legal move
         else:
             clear_output(wait=True)
-            display(Markdown("# ***%s*** isn't a valid move." % human_move))
-            display(board)
+            msg = "# ***%s*** isn't a valid move." % human_move

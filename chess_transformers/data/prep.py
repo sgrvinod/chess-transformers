@@ -3,8 +3,8 @@ import json
 import argparse
 import tables as tb
 from tqdm import tqdm
-from importlib import import_module
 
+from chess_transformers.configs import import_config
 from chess_transformers.data.utils import create_vocabulary, encode, parse_fen
 
 
@@ -234,9 +234,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config_name", type=str, help="Name of configuration file.")
     args = parser.parse_args()
-    CONFIG = import_module(
-        "chess_transformers.configs.data.{}".format(args.config_name)
-    )
+    CONFIG = import_config(args.config_name)
 
     # Prepare data
     prepare_data(
