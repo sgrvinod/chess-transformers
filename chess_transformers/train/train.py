@@ -18,7 +18,7 @@ DEVICE = torch.device(
 cudnn.benchmark = False
 
 
-def train(CONFIG):
+def train_model(CONFIG):
     """
     Training and validation.
 
@@ -26,7 +26,7 @@ def train(CONFIG):
 
         CONFIG (dict): Configuration. See ./configs.
     """
-    writer = SummaryWriter(log_dir=CONFIG.LOGS_FOLDER)
+    writer = SummaryWriter(log_dir=os.path.join(CONFIG.LOGS_FOLDER, CONFIG.NAME))
 
     # Initialize data-loaders
     train_loader = DataLoader(
@@ -430,4 +430,4 @@ if __name__ == "__main__":
     CONFIG = import_config(args.config_name)
 
     # Train model
-    train(CONFIG)
+    train_model(CONFIG)

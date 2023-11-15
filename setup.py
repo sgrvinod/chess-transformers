@@ -6,7 +6,7 @@ with open("README.md", mode="r", encoding="utf-8") as readme_file:
 
 setup(
     name="chess-transformers",
-    version="0.0.1",
+    version="0.1.0",
     author="Sagar Vinodababu",
     author_email="sgrvinod@gmail.com",
     description="Chess Transformers",
