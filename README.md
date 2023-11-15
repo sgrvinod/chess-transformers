@@ -59,29 +59,29 @@ Additionally, <ins>set the following environment variables</ins> on your compute
 
   - Set **`CT_EVAL_GAMES_FOLDER`** to the folder where you want to save PGN files for evaluation games. You do <ins>not</ins> need to set this if you do not plan to evaluate any model.
 
-
-
 ## Models
 
 There are currently two chess-transformer models available for use.
 
 |     Model Name     | # Params |  Training Data   |            Architecture             |                                                                      Predictions                                                                      |
 | :----------------: | :------: | :--------------: | :---------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------: |
-| [***CT-E-20***]()  |   20M    | [***LE1222***]() |      Transformer encoder only       |                                                     Best next half-move (or ply) <br> eg. *d6e5*                                                      |
-| [***CT-ED-45***]() |   45M    | [***LE1222***]() | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *d6e5* -> *g5g4* -> *d3e2* -> *g4h4* -> *e2g2* -> *h4h5* -> *e5f5* -> *h5h6* -> *g2g6* (*mate*) -> *loses* |
+| [***CT-E-20***]()  |   20M    | [***LE1222***]() |      Transformer encoder only       |                                                     Best next half-move (or ply) <br> eg. *f2e3*                                                      |
+| [***CT-ED-45***]() |   45M    | [***LE1222***]() | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *f2e3* -> *b4b3* -> *e3h6* -> *b3b2* -> *g4e6* -> *g8f8* -> *g3g7* -> *f8e8* -> *g7f7* -> *loses* |
 
 ### *CT-E-20*
 
 [**Configuration File**]() | [**Download Checkpoint**]() | 
 [**Download TensorBoard Logs**]() 
 
-This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*]() dataset. 
+This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*]() dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation) on the board in its current state. 
 
-A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation) on the board in its current state. 
+This is essentially a sequence (or image) classification task, where the sequence is the current state of the board, and the classes are the various moves that can be made on a chessboard in UCI notation. 
 
-This is essentially a sequence classification task, where the sequence is the current state of the board, and the classes are the various moves that can be made on a chessboard in UCI notation. 
+<p align="center">
+  <img src="img/ct_e_20.png"/>
+</p>
 
-*CT-E-20* contains about 20 million parameters.
+*CT-E-20* contains about <ins>20 million parameters</ins>.
 
 ```python
 from chess_transformers.configs import import_config
@@ -111,15 +111,16 @@ These evaluation games can be viewed [here]().
 [**Configuration File**]() | [**Download Checkpoint**]() | 
 [**Download TensorBoard Logs**]() 
 
-This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*]() dataset. 
+This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*]() dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made on the board in its current state, followed by the likely course of the game an arbitrary number of half-moves into the future. 
 
-A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made on the board in its current state, followed by the likely course of the game an arbitrary number of half-moves into the future. 
-
-This is essentially a sequence-to-sequence task, where the input sequence is the current state of the board, and the output sequence is the string of half-moves that will likely occur on the board from that point onwards. Potentially, strategies applied to such tasks, such as beam search for decoding the best possible sequence of half-moves, can also be applied.
-
+This is essentially a sequence-to-sequence (or image-to-sequence) task, where the input sequence is the current state of the board, and the output sequence is the string of half-moves that will likely occur on the board from that point onwards. Potentially, strategies applied to such tasks, such as beam search for decoding the best possible sequence of half-moves, can also be applied. 
 Training the model to predict not only the best half-move to make on the board right now but also the sequence of half-moves that follow can be viewed as a type of multitask training, although we are ultimately only interested in the very first half-move. This sequence of half-moves might also lend itself to making the model more "explainable" regarding its decision for that important first half-move.
 
-*CT-ED-45* contains about 45 million parameters.
+<p align="center">
+  <img src="img/ct_ed_45.png"/>
+</p>
+
+*CT-ED-45* contains about <ins>45 million parameters</ins>.
 
 ```python
 from chess_transformers.configs import import_config
@@ -304,8 +305,7 @@ See [**`lichess_eval.ipynb`**]() for an example.
 ### Time Control
 
 If you're using a *Unix*-type operating system — basically, not Windows — you can also set time control for your games. 
-
-Currently, only Fischer time control is available.
+Currently, only Fischer time control is available. 
 
 ```python
 from chess_transformers.play.clocks import ChessClock
@@ -316,15 +316,13 @@ clock = ChessClock(base_time=60,
 
 Pass this **`clock`** to the functions above instead of **`clock=None`**.
 
-Time control for Windows systems is not currently available.
-
-## Train
+## Train Models
 
 You're welcome to try to train your own models, but if you wish to contribute trained models, please [discuss first]().
 
 ### Dataset
 
-Skip this step if you wish to use one of the [existing datasets]().
+You can skip this step if you wish to use one of the [existing datasets]().
 
 - Collect PGN files of games you wish to use for training the model.
 
@@ -354,7 +352,7 @@ prepare_data(
 ```
 This will create all data files in **`CONFIG.DATA_FOLDER`**.
 
-### Train
+### Training
 
 - Create a configuration file for the model, like in [**`CT-E-20.py`**]().
 
@@ -373,37 +371,27 @@ train_model(CONFIG)
 ```
 - Monitor training with [*TensorBoard*]() with `tensorboard --logdir $CT_LOGS_DIR`.
 
-### Evaluate
+### Evaluation
 
 Evaluate in [**`lichess_eval.ipynb`**]() or use that code in your own Python notebook/script.
 
 ## Contribute
 
-Contributions — and any discussion thereof — are welcome. 
+Contributions — and any discussion thereof — are welcome. As you may have noticed, *Chess Transformers* is in initial development and the public API is <ins>not</ins> to be considered stable. 
 
-As you may have noticed, *Chess Transformers* is in initial development and the public API is <ins>not</ins> to be considered stable. 
-
-If you are planning to contribute bug-fixes, please go ahead and do so. 
-
-If you are planning to contribute in a way that extends *Chess Transformers* or adds any new features, data, or models, please [open an issue]() to discuss it <ins>before</ins> you spend any time on it. Otherwise, your PR may be rejected due to lack of consensus or alignment with current goals.
+If you are planning to contribute bug-fixes, please go ahead and do so. If you are planning to contribute in a way that extends *Chess Transformers* or adds any new features, data, or models, please [open an issue]() to discuss it <ins>before</ins> you spend any time on it. Otherwise, your PR may be rejected due to lack of consensus or alignment with current goals.
 
 Presently, the following types of contributions may be useful:
 
-- Better, more robust evaluation methods of chess-transformer models
-  
-- Evaluation of existing models against chess engines on different CPUs to study the effect of CPU specifications on engine strength and evaluation
-  
+- Better, more robust evaluation methods of chess-transformer models.
+- Evaluation of existing models against chess engines on different CPUs to study the effect of CPU specifications on engine strength and evaluation.
 - New models with:
-  - same transformer architecture but larger size, and on larger datasets
-  - or different transformer architectures or internal mechanisms
-  - or in general, improved evaluation scores
-
+  - same transformer architecture but larger size, and on larger datasets.
+  - or different transformer architectures or internal mechanisms.
+  - or in general, improved evaluation scores.
 - Chess clocks for Windows OS, or for *Unix*-type OS but for time controls <ins>other than</ins> Fischer time control.
-  
-- Refactoring of code that improves its ease of use
-
-- Model visualization for explainable AI, such as visualizing positional or move embeddings, or attention patterns
-
+- Refactoring of code that improves its ease of use.
+- Model visualization for explainable AI, such as visualizing positional or move embeddings, or attention patterns.
 - Streamline installation of this package, such as with automatic downloading of assets (training data, vocabularies, model checkpoints, etc.)
 
 This list is not exhaustive. Please do not hesitate to discuss your ideas. Thank you!
