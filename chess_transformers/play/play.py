@@ -2,9 +2,9 @@ import chess
 from IPython.utils import io
 from IPython.display import display, Markdown, clear_output
 
-from chess_transformers.play.utils import get_pgn, in_notebook, print_text, print_board
 from chess_transformers.play.exceptions import OutOfTime
 from chess_transformers.play.moves import model_move, engine_move, human_move
+from chess_transformers.play.utils import get_pgn, in_notebook, print_text, print_board
 
 
 def model_v_engine(

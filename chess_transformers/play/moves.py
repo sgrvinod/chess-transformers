@@ -1,8 +1,5 @@
-import os
-import json
 import chess
 import torch
-from datetime import date
 from IPython.display import clear_output, Markdown, display
 
 from chess_transformers.play.utils import (

@@ -65,14 +65,18 @@ BOARD_STATUS_LENGTH = 70  # total length of input sequence
 USE_AMP = True  # use automatic mixed precision training?
 CRITERION = LabelSmoothedCE  # training criterion (loss)
 OPTIMIZER = torch.optim.Adam  # optimizer
-LOGS_DIR = os.path.join(os.environ["CT_LOGS_FOLDER"], NAME)  # logs folder
+LOGS_DIR = (
+    os.path.join(os.environ.get("CT_LOGS_FOLDER"), NAME)
+    if os.environ.get("CT_LOGS_FOLDER")
+    else None
+)  # logs folder
 
 ###############################
 ######### Checkpoints #########
 ###############################
 
 CHECKPOINT_FOLDER = os.path.join(
-    os.environ["CT_CHECKPOINTS_FOLDER"], NAME
+    os.environ.get("CT_CHECKPOINTS_FOLDER"), NAME
 )  # folder containing checkpoints
 TRAINING_CHECKPOINT = (
     NAME + ".pt"
@@ -91,10 +95,10 @@ FINAL_CHECKPOINT = (
 ########## Stockfish ##########
 ###############################
 
-STOCKFISH_PATH = os.environ["CT_STOCKFISH_PATH"]  # path to Stockfish engine
-FAIRY_STOCKFISH_PATH = os.environ[
+STOCKFISH_PATH = os.environ.get("CT_STOCKFISH_PATH")  # path to Stockfish engine
+FAIRY_STOCKFISH_PATH = os.environ.get(
     "CT_FAIRY_STOCKFISH_PATH"
-]  # path to Fairy Stockfish engine
+)  # path to Fairy Stockfish engine
 LICHESS_LEVELS = {
     1: {"SKILL": -9, "DEPTH": 5, "TIME_CONSTRAINT": 0.050},
     2: {"SKILL": -5, "DEPTH": 5, "TIME_CONSTRAINT": 0.100},
@@ -105,6 +109,8 @@ LICHESS_LEVELS = {
     7: {"SKILL": 16, "DEPTH": 13, "TIME_CONSTRAINT": 0.500},
     8: {"SKILL": 20, "DEPTH": 22, "TIME_CONSTRAINT": 1.000},
 }  # from https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224
-EVAL_GAMES_FOLDER = os.path.join(
-    os.environ["CT_EVAL_GAMES_FOLDER"], NAME
+EVAL_GAMES_FOLDER = (
+    os.path.join(os.environ.get("CT_EVAL_GAMES_FOLDER"), NAME)
+    if os.environ.get("CT_EVAL_GAMES_FOLDER")
+    else None
 )  # folder where games against Stockfish are saved in PGN files

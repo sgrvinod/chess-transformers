@@ -11,7 +11,7 @@ NAME = "LE1222"  # name and identifier for this configuration
 ###############################
 
 DATA_FOLDER = os.path.join(
-    os.environ["CT_DATA_FOLDER"], NAME
+    os.environ.get("CT_DATA_FOLDER"), NAME
 )  # folder containing all data files
 H5_FILE = NAME + ".h5"  # H5 file containing data
 MAX_MOVE_SEQUENCE_LENGTH = 10  # expected maximum length of move sequences
