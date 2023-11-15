@@ -9,7 +9,7 @@
 
 *Chess Transformers* contains code for training transformer models to play chess by learning from human games. 
 
-This is in initial development and the public API may change at any time — maybe even thanks to [*you*](#contribute)! 
+This is in initial development and the public API may change at any time.
 
 ## Contents
 
