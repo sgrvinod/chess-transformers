@@ -4,9 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <img alt="GitHub release (with filter)" src="https://img.shields.io/github/v/release/sgrvinod/chess-transformers"> <img alt="GitHub License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers">
- <img alt="GitHub commit activity (branch)" src="https://img.shields.io/github/commit-activity/t/sgrvinod/chess-transformers"> </p>
-
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.1.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a> <a href="https://github.com/sgrvinod/chess-transformers/commits/main"><img alt="Commit Activity (branch)" src="https://img.shields.io/github/commit-activity/t/sgrvinod/chess-transformers"></a></p>
 <br>
 
 *Chess Transformers* contains code for training transformer models to play chess by learning from human games. 
