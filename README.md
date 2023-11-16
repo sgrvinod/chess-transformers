@@ -4,7 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.1.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a> <a href="https://github.com/sgrvinod/chess-transformers/commits/main"><img alt="Commit Activity (branch)" src="https://img.shields.io/github/commit-activity/t/sgrvinod/chess-transformers"></a></p>
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.1.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
 *Chess Transformers* contains code for training transformer models to play chess by learning from human games. 
@@ -103,9 +103,9 @@ model, vocabulary = load_assets(CONFIG)
 
 These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-20/).
 
-| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      ELO Difference      | Likelihood of Superiority |
+| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
 | :-----------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
-|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{ELO}$      |           $LOS$           |
+|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$      |           $LOS$           |
 |     **1**     | 1000  |  987  |   0    |  13   |         **99.35%**          | 873.70 <br> *(± 105.58)* |          100.00%          |
 |     **2**     | 1000  |  984  |   0    |  16   |         **99.20%**          | 837.37 <br> *(± 92.90)*  |          100.00%          |
 |     **3**     | 1000  |  854  |   72   |  74   |         **89.10%**          | 364.98 <br> *(± 31.32)*  |          100.00%          |
@@ -142,9 +142,9 @@ model, vocabulary = load_assets(CONFIG)
 
 *CT-ED-45* was evaluated against the Fairy Stockfish chess engine at various skill levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess, with the engine running on an AMD Ryzen 7 3800X 8-Core Processor.
 
-| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      ELO Difference      | Likelihood of Superiority |
+| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
 | :-----------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
-|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{ELO}$      |           $LOS$           |
+|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$      |           $LOS$           |
 |     **1**     | 1000  |  991  |   0    |   9   |         **99.55%**          | 937.93 <br> *(± 135.31)* |          100.00%          |
 |     **2**     | 1000  |  976  |   0    |  24   |         **98.80%**          | 766.23 <br> *(± 73.45)*  |          100.00%          |
 |     **3**     | 1000  |  695  |  214   |  91   |         **74.05%**          | 182.16 <br> *(± 23.12)*  |          100.00%          |

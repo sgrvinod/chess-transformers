@@ -4,6 +4,7 @@ colorama==0.4.5
 ipython==7.31.1
 Markdown==3.3.4
 regex==2022.7.9
+scipy==1.9.1
 setuptools==63.4.1
 tables==3.6.1
 tabulate==0.8.10

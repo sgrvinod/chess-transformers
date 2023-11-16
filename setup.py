@@ -29,6 +29,7 @@ setup(
         "tabulate==0.8.10",
         "torch==2.1.0",
         "tqdm==4.64.1",
+        "scipy==1.9.1",
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
