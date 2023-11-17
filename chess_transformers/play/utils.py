@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import chess
+import gdown
+import pathlib
 import markdown
 import textwrap
 import chess.pgn
@@ -53,10 +55,28 @@ def load_assets(CONFIG):
     # Model
     _model = CONFIG.MODEL(CONFIG).to(DEVICE)
 
-    # Checkpoint
-    checkpoint = torch.load(
-        os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.FINAL_CHECKPOINT)
+    # Download checkpoint and vocabulary if they haven't already been downloaded
+    checkpoint_folder = (
+        pathlib.Path(__file__).parent.parent.resolve()
+        / "checkpoints"
+        / CONFIG.NAME
     )
+    checkpoint_folder.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = checkpoint_folder / CONFIG.FINAL_CHECKPOINT
+    if not checkpoint_path.exists():
+        print("\nCannot find model checkpoint on disk; will download.")
+        gdown.download(
+            id=CONFIG.FINAL_CHECKPOINT_GDID, output=str(checkpoint_path), quiet=False
+        )
+    vocabulary_path = checkpoint_folder / "vocabulary.json"
+    if not vocabulary_path.exists():
+        print("\nCannot find vocabulary on disk; will download.")
+        gdown.download(
+            id=CONFIG.VOCABULARY_GDID, output=str(vocabulary_path), quiet=False
+        )
+
+    # Load checkpoint
+    checkpoint = torch.load(str(checkpoint_path))
     _model.load_state_dict(checkpoint["model_state_dict"])
 
     # Compile model
@@ -68,8 +88,8 @@ def load_assets(CONFIG):
     )
     model.eval()  # eval mode disables dropout
 
-    # Vocabulary
-    vocabulary = json.load(open(os.path.join(CONFIG.DATA_FOLDER, CONFIG.VOCAB_FILE)))
+    # Load vocabulary
+    vocabulary = json.load(open(str(vocabulary_path)))
     for vocabulary_name in vocabulary:
         if set(vocabulary[vocabulary_name].keys()).issubset({"true", "false"}):
             for bool_string in set(vocabulary[vocabulary_name].keys()):
@@ -460,6 +480,8 @@ def write_pgns(pgns, pgn_file):
 
         pgn_file (str): The path to write as a file.
     """
+    parent_folder = pathlib.Path(pgn_file).parent.resolve()
+    parent_folder.mkdir(parents=True, exist_ok=True)
     with open(pgn_file, "w") as f:
         f.write(pgns)
 

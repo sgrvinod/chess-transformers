@@ -2,7 +2,9 @@ import os
 import torch
 
 from chess_transformers.configs.data.LE1222 import *
+from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDataset
+from chess_transformers.configs.other.fairy_stockfish import *
 from chess_transformers.train.utils import get_lr, get_vocab_sizes
 from chess_transformers.transformers.criteria import LabelSmoothedCE
 from chess_transformers.transformers.models import ChessTransformerEncoder
@@ -90,25 +92,17 @@ CHECKPOINT_AVG_SUFFIX = (
 FINAL_CHECKPOINT = (
     "averaged_" + NAME + ".pt"
 )  # final checkpoint to be used for eval/inference
+FINAL_CHECKPOINT_GDID = (
+    "1CnLD4tBTsCJVEvs8wocaSShpppiCWy96"  # File ID on Google Drive for downloading
+)
+VOCABULARY_GDID = (
+    "1Zpw9BR5YbiWfV7TZpa03DWId41PnzvS3"  # File ID on Google Drive for download
+)
 
-###############################
-########## Stockfish ##########
-###############################
+################################
+########## Evaluation ##########
+################################
 
-STOCKFISH_PATH = os.environ.get("CT_STOCKFISH_PATH")  # path to Stockfish engine
-FAIRY_STOCKFISH_PATH = os.environ.get(
-    "CT_FAIRY_STOCKFISH_PATH"
-)  # path to Fairy Stockfish engine
-LICHESS_LEVELS = {
-    1: {"SKILL": -9, "DEPTH": 5, "TIME_CONSTRAINT": 0.050},
-    2: {"SKILL": -5, "DEPTH": 5, "TIME_CONSTRAINT": 0.100},
-    3: {"SKILL": -1, "DEPTH": 5, "TIME_CONSTRAINT": 0.150},
-    4: {"SKILL": 3, "DEPTH": 5, "TIME_CONSTRAINT": 0.200},
-    5: {"SKILL": 7, "DEPTH": 5, "TIME_CONSTRAINT": 0.300},
-    6: {"SKILL": 11, "DEPTH": 8, "TIME_CONSTRAINT": 0.400},
-    7: {"SKILL": 16, "DEPTH": 13, "TIME_CONSTRAINT": 0.500},
-    8: {"SKILL": 20, "DEPTH": 22, "TIME_CONSTRAINT": 1.000},
-}  # from https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224
 EVAL_GAMES_FOLDER = (
     os.path.join(os.environ.get("CT_EVAL_GAMES_FOLDER"), NAME)
     if os.environ.get("CT_EVAL_GAMES_FOLDER")
