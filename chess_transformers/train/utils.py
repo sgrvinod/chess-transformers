@@ -2,6 +2,7 @@ import os
 import math
 import json
 import torch
+import pathlib
 
 
 def view_game(game):
@@ -98,8 +99,7 @@ def save_checkpoint(epoch, model, optimizer, config_name, checkpoint_folder, pre
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
     }
-    if not os.path.exists(checkpoint_folder):
-        os.makedirs(checkpoint_folder)
+    pathlib.Path(checkpoint_folder).mkdir(parents=True, exist_ok=True)
     filename = prefix + config_name + ".pt"
     torch.save(state, os.path.join(checkpoint_folder, filename))
     print("Checkpoint saved.\n")

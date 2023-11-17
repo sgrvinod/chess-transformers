@@ -5,4 +5,4 @@
 logs
 .vscode
 __pycache__
-checkpoints
+chess_transformers/checkpoints

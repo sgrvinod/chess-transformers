@@ -7,7 +7,7 @@
 <p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.1.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
-*Chess Transformers* contains code for training transformer models to play chess by learning from human games. 
+*Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
 
 This is in initial development and the public API may change at any time.
 
@@ -42,22 +42,14 @@ If you are planning to develop or contribute to the codebase, install the packag
 pip install -e .
 ```
 
-Additionally, <ins>set the following environment variables</ins> on your computer.
+**OPTIONAL** — If you want to train or evaluate a model, you may need to set some of the following environment variables on your computer:
 
-- <ins>Required</ins> environment variables:
+  - Set **`CT_DATA_FOLDER`** to the folder on your computer where you have the training data. You <ins>do not</ins> need to set this if you do not plan to train any models. 
 
-  - Set **`CT_DATA_FOLDER`** to the folder on your computer where you have the training data, which also includes the vocabulary file needed for inference with the model of choice. You will need to [download](#datasets) the training data manually. 
-  
-    Each vocabulary file will need to be <ins>in its own folder</ins> in **`CT_DATA_FOLDER`** with the name of the folder being the name of the dataset. For example, the vocabulary file **`vocabulary.json`** for [*LE1222*](#le1222) should be located in the folder **`[$CT_DATA_FOLDER]/LE1222/`**.
-
-  - Set **`CT_CHECKPOINTS_FOLDER`** to the folder on your computer where you have the model checkpoints. You will need to [download](#models) model checkpoints manually. 
+  - Set **`CT_CHECKPOINTS_FOLDER`** to the folder on your computer where you want to save model checkpoints during training. You <ins>do not</ins> need to set this if you do not plan to train any models.
     
-    Each checkpoint will need to be <ins>in its own folder</ins> in **`CT_CHECKPOINTS_FOLDER`** with the name of the folder being the name of the model. For example, the checkpoint **`averaged_CT-E-20.pt`** for [*CT-E-20*](#ct-e-20) should be located in the folder **`[$CT_CHECKPOINTS_FOLDER]/CT-E-20/`**.
-
-- <ins>Optional</ins> environment variables:
-    
-  - Set **`CT_LOGS_FOLDER`** to the folder on your computer where you wish to save any training logs. You <ins>do not</ins> need to set this if you do not plan to train any models.
-    
+  - Set **`CT_LOGS_FOLDER`** to the folder on your computer where you wish to save training logs. You <ins>do not</ins> need to set this if you do not plan to train any models.
+     
   - Set **`CT_STOCKFISH_PATH`** to the executable of the Stockfish 16 chess engine. You <ins>do not</ins> need to set this if you do not plan to have a model play against this chess engine.
 
   - Set **`CT_FAIRY_STOCKFISH_PATH`** to the executable of the Fairy Stockfish chess engine. You <ins>do not</ins> need to set this if you do not plan to have a model play against this chess engine.
@@ -75,27 +67,28 @@ There are currently two models available for use in *Chess Transformers*.
 
 ### *CT-E-20*
 
-[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Download Checkpoint**](https://drive.google.com/drive/folders/1QA5Hax0aOn3VoXjUtkmnECp0ZV78wGtb?usp=drive_link) | 
-[**Download TensorBoard Logs**](https://drive.google.com/drive/folders/1WwWJS4804uKrONPcCtyQSGlOSUlo05-0?usp=drive_link) 
+[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://drive.google.com/drive/folders/1QA5Hax0aOn3VoXjUtkmnECp0ZV78wGtb?usp=drive_link) | 
+[**TensorBoard Logs**](https://drive.google.com/drive/folders/1WwWJS4804uKrONPcCtyQSGlOSUlo05-0?usp=drive_link) 
 
 This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation).
-
-This is essentially a sequence (or image) classification task, where the sequence is the current state of the board, and the classes are the various moves that can be made on a chessboard in UCI notation. 
-
-*CT-E-20* contains about 20 million parameters.
 
 <p align="center">
   <img src="img/ct_e_20.png"/>
 </p>
 
+This is essentially a sequence (or image) classification task, where the sequence is the current state of the board, and the classes are the various moves that can be made on a chessboard in UCI notation. 
 
+*CT-E-20* contains about 20 million parameters.
 
 ```python
+from chess_transformers.play import load_assets
 from chess_transformers.configs import import_config
 
 CONFIG = import_config("CT-E-20")
 model, vocabulary = load_assets(CONFIG)
 ```
+
+You <ins>do not</ins> need to download the model checkpoint or vocabulary manually. They will be downloaded automatically if required.
 
 #### Model Skill
 
@@ -115,10 +108,14 @@ These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-2
 
 ### *CT-ED-45*
 
-[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Download Checkpoint**](https://drive.google.com/drive/folders/1rT2-wA4vOyBOb2lj8dY22ofoNIv8BgCT?usp=drive_link) | 
-[**Download TensorBoard Logs**](https://drive.google.com/drive/folders/1LGsKMsjFRjQBS56UJZTjegFMl7amIbSw?usp=drive_link) 
+[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://drive.google.com/drive/folders/1rT2-wA4vOyBOb2lj8dY22ofoNIv8BgCT?usp=drive_link) | 
+[**TensorBoard Logs**](https://drive.google.com/drive/folders/1LGsKMsjFRjQBS56UJZTjegFMl7amIbSw?usp=drive_link) 
 
 This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made next, followed by the likely course of the game an arbitrary number of half-moves into the future. 
+
+<p align="center">
+  <img src="img/ct_ed_45.png"/>
+</p>
 
 This is essentially a sequence-to-sequence (or image-to-sequence) task, where the input sequence is the current state of the board, and the output sequence is a string of half-moves that will likely occur on the board from that point onwards. Potentially, strategies applied to such tasks, such as beam search for decoding the best possible sequence of half-moves, can also be applied to this model. Training the model to predict not only the best half-move to make on the board right now, but also the sequence of half-moves that follow, can be viewed as a type of multitask training. 
 
@@ -126,17 +123,14 @@ We are ultimately only interested in the very first half-move. Nevertheless, the
 
 *CT-ED-45* contains about 45 million parameters.
 
-<p align="center">
-  <img src="img/ct_ed_45.png"/>
-</p>
-
-
 ```python
+from chess_transformers.play import load_assets
 from chess_transformers.configs import import_config
 
 CONFIG = import_config("CT-ED-45")
 model, vocabulary = load_assets(CONFIG)
 ```
+You <ins>do not</ins> need to download the model checkpoint or vocabulary manually. They will be downloaded automatically if required.
 
 #### Model Skill
 
@@ -231,8 +225,8 @@ You could either play in a Jupyter notebook (recommended for better UI) or in a 
 ```python
 import os
 from chess_transformers.configs import import_config
-from chess_transformers.play import human_v_model, warm_up
-from chess_transformers.play.utils import load_assets, write_pgns
+from chess_transformers.play.utils import write_pgns
+from chess_transformers.play import load_assets, warm_up, human_v_model 
 
 # Load configuration
 config_name = "CT-E-20"
