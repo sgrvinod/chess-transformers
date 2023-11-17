@@ -395,7 +395,6 @@ Presently, the following types of contributions may be useful:
 - Chess clocks for Windows OS, or for *Unix*-type OS but for time controls <ins>other than</ins> Fischer time control.
 - Refactoring of code that improves its ease of use.
 - Model visualization for explainable AI, such as visualizing positional and move embeddings, or attention patterns.
-- Streamline installation of this package, such as with automatic downloading of assets (training data, vocabularies, model checkpoints, etc.)
 
 This list is not exhaustive. Please do not hesitate to discuss your ideas. Thank you!
 
