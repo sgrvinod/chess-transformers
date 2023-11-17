@@ -24,7 +24,7 @@ setup(
         "ipython==7.31.1",
         "Markdown==3.3.4",
         "regex==2022.7.9",
-        "setuptools==63.4.1",
+        "setuptools==65.5.1",
         "tables==3.6.1",
         "tabulate==0.8.10",
         "torch==2.1.0",
