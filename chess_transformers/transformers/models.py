@@ -367,7 +367,7 @@ class ChessTransformerEncoder(nn.Module):
 
         Returns:
 
-            torch.FloatTensor: The next-move logits, of size (N,
+            torch.FloatTensor: The next-move logits, of size (N, 1,
             vocab_size).
         """
         # Encoder
@@ -553,8 +553,12 @@ class ChessTransformerEncoderFT(nn.Module):
         )  # (N, BOARD_STATUS_LENGTH, d_model)
 
         # Find logits over vocabulary at the "turn" token
-        from_squares = self.from_squares(boards[:, 5:, :]).squeeze(2)  # (N, 64)
-        to_squares = self.to_squares(boards[:, 5:, :]).squeeze(2)  # (N, 64)
+        from_squares = (
+            self.from_squares(boards[:, 5:, :]).squeeze(2).unsqueeze(1)
+        )  # (N, 1, 64)
+        to_squares = (
+            self.to_squares(boards[:, 5:, :]).squeeze(2).unsqueeze(1)
+        )  # (N, 1, 64)
 
         return from_squares, to_squares
 

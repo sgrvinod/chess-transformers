@@ -67,7 +67,7 @@ BOARD_STATUS_LENGTH = 70  # total length of input sequence
 USE_AMP = True  # use automatic mixed precision training?
 CRITERION = LabelSmoothedCE  # training criterion (loss)
 OPTIMIZER = torch.optim.Adam  # optimizer
-LOGS_DIR = (
+LOGS_FOLDER = (
     os.path.join(os.environ.get("CT_LOGS_FOLDER"), NAME)
     if os.environ.get("CT_LOGS_FOLDER")
     else None

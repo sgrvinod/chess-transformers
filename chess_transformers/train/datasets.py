@@ -152,10 +152,10 @@ class ChessDatasetFT(Dataset):
         board_position = torch.IntTensor(
             self.encoded_table[self.indices[i]]["board_position"]
         )  # (64)
-        from_square = torch.IntTensor(
+        from_square = torch.LongTensor(
             [self.encoded_table[self.indices[i]]["from_square"]]
         )  # (1)
-        to_square = torch.IntTensor(
+        to_square = torch.LongTensor(
             [self.encoded_table[self.indices[i]]["to_square"]]
         )  # (1)
         length = torch.LongTensor([1])

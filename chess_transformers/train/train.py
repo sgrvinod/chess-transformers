@@ -26,14 +26,13 @@ def train_model(CONFIG):
 
         CONFIG (dict): Configuration. See ./configs.
     """
-    writer = SummaryWriter(log_dir=os.path.join(CONFIG.LOGS_FOLDER, CONFIG.NAME))
+    writer = SummaryWriter(log_dir=CONFIG.LOGS_FOLDER)
 
     # Initialize data-loaders
     train_loader = DataLoader(
         dataset=CONFIG.DATASET(
             data_folder=CONFIG.DATA_FOLDER,
             h5_file=CONFIG.H5_FILE,
-            splits_file=CONFIG.SPLITS_FILE,
             split="train",
             n_moves=CONFIG.N_MOVES,
         ),
@@ -47,7 +46,6 @@ def train_model(CONFIG):
         dataset=CONFIG.DATASET(
             data_folder=CONFIG.DATA_FOLDER,
             h5_file=CONFIG.H5_FILE,
-            splits_file=CONFIG.SPLITS_FILE,
             split="val",
             n_moves=CONFIG.N_MOVES,
         ),
@@ -223,7 +221,7 @@ def train_epoch(
                 # Forward prop.
                 predicted_from_squares, predicted_to_squares = model(
                     batch
-                )  # (N, 64), (N, 64)
+                )  # (N, 1, 64), (N, 1, 64)
 
                 # Loss
                 loss = criterion(
@@ -260,10 +258,10 @@ def train_epoch(
 
         elif CONFIG.NAME.startswith(("CT-EFT-")):
             top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                logits=predicted_from_squares,  # (N, 64)
-                targets=batch["from_squares"],  # (N)
-                other_logits=predicted_to_squares,  # (N, 64)
-                other_targets=batch["to_squares"],  # (N)
+                logits=predicted_from_squares[:, 0, :],  # (N, 64)
+                targets=batch["from_squares"].squeeze(1),  # (N)
+                other_logits=predicted_to_squares[:, 0, :],  # (N, 64)
+                other_targets=batch["to_squares"].squeeze(1),  # (N)
                 k=[1, 3, 5],
             )
 
@@ -433,7 +431,7 @@ def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
                     # Forward prop.
                     predicted_from_squares, predicted_to_squares = model(
                         batch
-                    )  # (N, 64), (N, 64)
+                    )  # (N, 1, 64), (N, 1, 64)
 
                     # Loss
                     loss = criterion(
@@ -463,10 +461,10 @@ def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
 
             elif CONFIG.NAME.startswith(("CT-EFT-")):
                 top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                    logits=predicted_from_squares,  # (N, 64)
-                    targets=batch["from_squares"],  # (N)
-                    other_logits=predicted_to_squares,  # (N, 64)
-                    other_targets=batch["to_squares"],  # (N)
+                    logits=predicted_from_squares[:, 0, :],  # (N, 64)
+                    targets=batch["from_squares"].squeeze(1),  # (N)
+                    other_logits=predicted_to_squares[:, 0, :],  # (N, 64)
+                    other_targets=batch["to_squares"].squeeze(1),  # (N)
                     k=[1, 3, 5],
                 )
 

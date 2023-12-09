@@ -157,10 +157,10 @@ def topk_accuracy(logits, targets, other_logits=None, other_targets=None, k=[1, 
     """
     with torch.no_grad():
         batch_size = logits.shape[0]
-        if other_logits:
+        if other_logits is not None:
             # Get indices corresponding to top-max(k) scores
-            probabilities = F.softmax(logits).unsqueeze(2)  # (N, vocab_size, 1)
-            other_probabilities = F.softmax(other_logits).unsqueeze(
+            probabilities = F.softmax(logits, dim=-1).unsqueeze(2)  # (N, vocab_size, 1)
+            other_probabilities = F.softmax(other_logits, dim=-1).unsqueeze(
                 1
             )  # (N, 1, other_vocab_size)
             combined_probabilities = torch.bmm(probabilities, other_probabilities).view(
@@ -169,7 +169,7 @@ def topk_accuracy(logits, targets, other_logits=None, other_targets=None, k=[1, 
             _, flattened_indices = combined_probabilities.topk(
                 k=max(k), dim=1
             )  # (N, max(k))
-            indices == flattened_indices // other_logits.shape[-1]  # (N, max(k))
+            indices = flattened_indices // other_logits.shape[-1]  # (N, max(k))
             other_indices = flattened_indices % other_logits.shape[-1]  # (N, max(k))
 
             # Expand targets to the same shape
