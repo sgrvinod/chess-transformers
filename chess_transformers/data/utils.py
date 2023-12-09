@@ -2,9 +2,7 @@ import os
 import regex
 from collections import Counter
 
-
-FILE_NAMES = ["a", "b", "c", "d", "e", "f", "g", "h"]
-RANK_NAMES = ["1", "2", "3", "4", "5", "6", "7", "8"]
+from chess_transformers.data.levels import RANKS, FILES
 
 
 def replace_number(match):
@@ -40,7 +38,7 @@ def square_index(square):
     file = square[0]
     rank = square[1]
 
-    return (7 - RANK_NAMES.index(rank)) * 8 + FILE_NAMES.index(file)
+    return (7 - RANKS.index(rank)) * 8 + FILES.index(file)
 
 
 def assign_ep_square(board, ep_square):
@@ -125,61 +123,6 @@ def parse_fen(fen):
 
     return turn, board, white_kingside, white_queenside, black_kingside, black_queenside
 
-
-def create_vocabulary(data_folder, moves_files):
-    """
-    Create a vocabulary for all categorical variables.
-
-    Note that only creating the move vocabulary is non-trivial; the rest
-    can be written manually.
-
-    Args:
-
-        data_folder (str): The folder containing the move files.
-
-        moves_files (str): The names of the move files.
-
-    Returns:
-
-        dict: The constructed vocabulary.
-    """
-
-    # Vocabulary
-    vocabulary = {
-        "move_sequence": {},
-        "board_position": dict(
-            zip(
-                [".", ",", "P", "p", "R", "r", "N", "n", "B", "b", "Q", "q", "K", "k"],
-                range(14),
-            )
-        ),
-        "turn": {"b": 0, "w": 1},
-        "white_kingside_castling_rights": {False: 0, True: 1},
-        "white_queenside_castling_rights": {False: 0, True: 1},
-        "black_kingside_castling_rights": {False: 0, True: 1},
-        "black_queenside_castling_rights": {False: 0, True: 1},
-    }
-
-    # Create move vocabulary
-    move_count = Counter()
-    for i in range(len(moves_files)):
-        move_count.update(
-            "\n".join(
-                open(os.path.join(data_folder, moves_files[i]), "r")
-                .read()
-                .split("\n\n")
-            ).split("\n")
-        )
-    del move_count["1-0"], move_count["0-1"], move_count[""]
-    for i, move in enumerate(dict(move_count.most_common()).keys()):
-        vocabulary["move_sequence"][move] = i
-    vocabulary["move_sequence"]["<move>"] = i + 1
-    vocabulary["move_sequence"]["<loss>"] = i + 2
-    vocabulary["move_sequence"]["<pad>"] = i + 3
-
-    return vocabulary
-
-
 def encode(item, vocabulary):
     """
     Encode an item with its index in the vocabulary its from.
@@ -201,7 +144,7 @@ def encode(item, vocabulary):
     """
     if isinstance(item, list):  # move sequence
         return [vocabulary[it] for it in item]
-    elif isinstance(item, str):  # turn or board position
+    elif isinstance(item, str):  # turn or board position or square
         return (
             vocabulary[item] if item in vocabulary else [vocabulary[it] for it in item]
         )

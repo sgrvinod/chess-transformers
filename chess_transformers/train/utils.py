@@ -3,25 +3,7 @@ import math
 import json
 import torch
 import pathlib
-
-
-def view_game(game):
-    """
-    View the progression of a chess game.
-
-    Args:
-
-        game (chess.pgn.Game): The game to be viewed.
-    """
-    board = game.board()
-    for move_number, move in enumerate(game.mainline_moves()):
-        print("\n")
-        print("Move #%d" % move_number)
-        print("LAN:", board.lan(move))
-        print("SAN:", board.san(move))
-        print("UCI:", board.uci(move))
-        board.push(move)
-        print(board)
+import torch.nn.functional as F
 
 
 def get_vocab_sizes(data_folder, vocab_file):
@@ -89,10 +71,11 @@ def save_checkpoint(epoch, model, optimizer, config_name, checkpoint_folder, pre
 
         config_name (str): The configuration name.
 
-        checkpoint_folder (str): The folder where checkpoints must be saved.
+        checkpoint_folder (str): The folder where checkpoints must be
+        saved.
 
-        prefix (str, optional): The checkpoint filename prefix. Defaults to
-        "".
+        prefix (str, optional): The checkpoint filename prefix. Defaults
+        to "".
     """
     state = {
         "epoch": epoch,
@@ -141,17 +124,30 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def topk_accuracy(logits, targets, k=[1, 3, 5]):
+def topk_accuracy(logits, targets, other_logits=None, other_targets=None, k=[1, 3, 5]):
     """
     Compute "top-k" accuracies for multiple values of "k".
 
+    Optionally, a second set of logits and targets, for a second
+    predicted variable, can be provided. In this case, probabilities
+    associated with both sets of logits are combined to arrive at the
+    best combinations of both predicted variables. A correct prediction
+    occurs when the combination of the targets is present in the top "k"
+    predicted combinations.
+
     Args:
 
-        logits (torch.FloatTensor): Predicted next-move probabilities,
-        of size (N, move_vocab_size).
+        logits (torch.FloatTensor): Predicted probabilities, of size (N,
+        vocab_size).
 
-        targets (torch.LongTensor): Actual moves made by the winner of
-        this game, of size (N).
+        targets (torch.LongTensor): Actual targets, of size (N).
+
+        other_logits (torch.FloatTensor, optional): Predicted probabilities for a
+        second predicted variable, if any, of size (N, other_vocab_size).
+        Defaults to None.
+
+        other_targets (torch.LongTensor, optional): Actual targets for a second
+        predicted variable, if any, of size (N). Defaults to None.
 
         k (list, optional): Values of "k". Defaults to [1, 3, 5].
 
@@ -161,18 +157,45 @@ def topk_accuracy(logits, targets, k=[1, 3, 5]):
     """
     with torch.no_grad():
         batch_size = logits.shape[0]
+        if other_logits:
+            # Get indices corresponding to top-max(k) scores
+            probabilities = F.softmax(logits).unsqueeze(2)  # (N, vocab_size, 1)
+            other_probabilities = F.softmax(other_logits).unsqueeze(
+                1
+            )  # (N, 1, other_vocab_size)
+            combined_probabilities = torch.bmm(probabilities, other_probabilities).view(
+                batch_size, -1
+            )  # (N, vocab_size * other_vocab_size)
+            _, flattened_indices = combined_probabilities.topk(
+                k=max(k), dim=1
+            )  # (N, max(k))
+            indices == flattened_indices // other_logits.shape[-1]  # (N, max(k))
+            other_indices = flattened_indices % other_logits.shape[-1]  # (N, max(k))
 
-        # Get move indices corresponding to top-max(k) scores
-        _, indices = logits.topk(k=max(k), dim=1)  # (N, max(k))
+            # Expand targets to the same shape
+            targets = targets.unsqueeze(1).expand_as(indices)  # (N, max(k))
+            other_targets = other_targets.unsqueeze(1).expand_as(
+                other_indices
+            )  # (N, max(k))
 
-        # Expand actual (target) moves to the same shape
-        targets = targets.unsqueeze(1).expand_as(indices)  # (N, max(k))
+            # Get correct predictions
+            correct_predictions = (indices == targets) * (
+                other_indices == other_targets
+            )  # (N, max(k))
+
+        else:
+            # Get indices corresponding to top-max(k) scores
+            _, indices = logits.topk(k=max(k), dim=1)  # (N, max(k))
+
+            # Expand targets to the same shape
+            targets = targets.unsqueeze(1).expand_as(indices)  # (N, max(k))
+
+            # Get correct predictions
+            correct_predictions = indices == targets  # (N, max(k))
 
         # Calculate top-k accuracies
-        correct_predictions = indices == targets
         topk_accuracies = [
             correct_predictions[:, :k_value].sum().item() / batch_size for k_value in k
         ]
 
         return topk_accuracies
-

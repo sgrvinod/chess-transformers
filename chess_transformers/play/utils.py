@@ -55,11 +55,10 @@ def load_assets(CONFIG):
     # Model
     _model = CONFIG.MODEL(CONFIG).to(DEVICE)
 
-    # Download checkpoint and vocabulary if they haven't already been downloaded
+    # Download checkpoint and vocabulary if they haven't already been
+    # downloaded
     checkpoint_folder = (
-        pathlib.Path(__file__).parent.parent.resolve()
-        / "checkpoints"
-        / CONFIG.NAME
+        pathlib.Path(__file__).parent.parent.resolve() / "checkpoints" / CONFIG.NAME
     )
     checkpoint_folder.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_folder / CONFIG.FINAL_CHECKPOINT
@@ -199,8 +198,8 @@ def get_model_inputs(board, vocabulary):
     model_inputs["moves"] = (
         torch.LongTensor(
             [
-                vocabulary["move_sequence"]["<move>"],
-                vocabulary["move_sequence"]["<pad>"],
+                vocabulary["moves"]["<move>"],
+                vocabulary["moves"]["<pad>"],
             ]
         )
         .unsqueeze(0)
@@ -228,7 +227,8 @@ def capitalize_pawn_promotion_piece(uci_move):
 
     Returns:
 
-        _type_: _description_
+        str: The UCI notation of the pawn promotion move with the target
+        piece capitalized.
     """
     if len(uci_move) == 5:
         uci_move = uci_move[:-1] + uci_move[-1].upper()
@@ -254,7 +254,7 @@ def get_legal_moves(board, vocabulary):
     legal_moves = list()
     for legal_move in board.legal_moves:
         legal_move = capitalize_pawn_promotion_piece(str(legal_move))
-        if legal_move in vocabulary["move_sequence"]:
+        if legal_move in vocabulary["moves"]:
             legal_moves.append(legal_move)
 
     return legal_moves

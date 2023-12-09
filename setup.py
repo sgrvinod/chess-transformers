@@ -25,7 +25,7 @@ setup(
         "IPython>=8.10",
         "Markdown==3.3.4",
         "regex==2022.7.9",
-        "tables==3.6.1",
+        "tables==3.9.2",
         "tabulate==0.8.10",
         "torch==2.1.0",
         "tqdm==4.64.1",

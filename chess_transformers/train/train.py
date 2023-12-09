@@ -91,7 +91,9 @@ def train_model(CONFIG):
     )
 
     # Loss function
-    criterion = CONFIG.CRITERION(eps=CONFIG.LABEL_SMOOTHING, n_moves=CONFIG.N_MOVES)
+    criterion = CONFIG.CRITERION(
+        eps=CONFIG.LABEL_SMOOTHING, n_predictions=CONFIG.N_MOVES
+    )
     criterion = criterion.to(DEVICE)
 
     # AMP scaler
@@ -167,7 +169,8 @@ def train_epoch(
 
         step (int): Step number.
 
-        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard writer.
+        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard
+        writer.
 
         CONFIG (dict): Configuration.
     """
@@ -197,23 +200,47 @@ def train_epoch(
         with torch.autocast(
             device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
         ):
-            # Forward prop.
-            predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
-            # Note: n_moves is how many moves into
-            # the future we are targeting for modeling. For an
-            # Encoder-Decoder model, this might be
-            # max_move_sequence_length. For an Encoder-only model, this
-            # will be 1.
+            # (Direct) Move prediction models
+            if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
+                # Forward prop.
+                predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
+                # Note: n_moves is how many moves into the future we are
+                # targeting for modeling. For an Encoder-Decoder model,
+                # this might be max_move_sequence_length. For an
+                # Encoder-only model, this will be 1.
 
-            # Loss
-            loss = criterion(
-                predicted_moves=predicted_moves,  # (N, n_moves, move_vocab_size)
-                target_moves=batch["moves"][:, 1:],  # (N, n_moves)
-                lengths=batch["lengths"],  # (N, 1)
-            )  # scalar
+                # Loss
+                loss = criterion(
+                    predicted=predicted_moves,  # (N, n_moves, move_vocab_size)
+                    targets=batch["moves"][:, 1:],  # (N, n_moves)
+                    lengths=batch["lengths"],  # (N, 1)
+                )  # scalar
+                # Note: We don't pass the first move (the prompt
+                # "<move>") as it is not a target/next-move of anything
+
+            # "From" and "To" square prediction models
+            elif CONFIG.NAME.startswith(("CT-EFT-")):
+                # Forward prop.
+                predicted_from_squares, predicted_to_squares = model(
+                    batch
+                )  # (N, 64), (N, 64)
+
+                # Loss
+                loss = criterion(
+                    predicted=predicted_from_squares,
+                    targets=batch["from_squares"],
+                    lengths=batch["lengths"],
+                ) + criterion(
+                    predicted=predicted_to_squares,
+                    targets=batch["to_squares"],
+                    lengths=batch["lengths"],
+                )  # scalar
+
+            # Other models
+            else:
+                raise NotImplementedError
+
             loss = loss / CONFIG.BATCHES_PER_STEP
-            # Note: We don't pass the first move (the prompt "<move>")
-            # as it is not a target/next-move of anything
 
         # Backward prop.
         scaler.scale(loss).backward()
@@ -223,15 +250,28 @@ def train_epoch(
             loss.item() * CONFIG.BATCHES_PER_STEP, batch["lengths"].sum().item()
         )
 
-        # Keep track of accuracy
-        top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-            logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
-            targets=batch["moves"][:, 1],  # (N)
-            k=[1, 3, 5],
-        )
-        top1_accuracies.update(top1_accuracy, predicted_moves.shape[0])
-        top3_accuracies.update(top3_accuracy, predicted_moves.shape[0])
-        top5_accuracies.update(top5_accuracy, predicted_moves.shape[0])
+        # Keep track of accuracy (Direct) Move prediction models
+        if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
+            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
+                targets=batch["moves"][:, 1],  # (N)
+                k=[1, 3, 5],
+            )
+
+        elif CONFIG.NAME.startswith(("CT-EFT-")):
+            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                logits=predicted_from_squares,  # (N, 64)
+                targets=batch["from_squares"],  # (N)
+                other_logits=predicted_to_squares,  # (N, 64)
+                other_targets=batch["to_squares"],  # (N)
+                k=[1, 3, 5],
+            )
+
+        else:
+            raise NotImplementedError
+        top1_accuracies.update(top1_accuracy, batch["lengths"].shape[0])
+        top3_accuracies.update(top3_accuracy, batch["lengths"].shape[0])
+        top5_accuracies.update(top5_accuracy, batch["lengths"].shape[0])
 
         # Update model (i.e. perform a training step) only after
         # gradients are accumulated from batches_per_step batches
@@ -344,7 +384,8 @@ def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
 
         epoch (int): Epoch number.
 
-        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard writer.
+        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard
+        writer.
 
         CONFIG (dict): Configuration.
     """
@@ -368,33 +409,72 @@ def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
             with torch.autocast(
                 device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
             ):
-                # Forward prop.
-                predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
-                # Note: n_moves is how many moves into
-                # the future we are targeting for modeling. For an
-                # Encoder-Decoder model, this might be
-                # max_move_sequence_length. For an Encoder-only model, this
-                # will be 1.
+                # (Direct) Move prediction models
+                if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
+                    # Forward prop.
+                    predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
+                    # Note: n_moves is how many moves into the future we
+                    # are targeting for modeling. For an Encoder-Decoder
+                    # model, this might be max_move_sequence_length. For
+                    # an Encoder-only model, this will be 1.
 
-                # Loss
-                loss = criterion(
-                    predicted_moves=predicted_moves,  # (N, n_moves, move_vocab_size)
-                    target_moves=batch["moves"][:, 1:],  # (N, n_moves)
-                    lengths=batch["lengths"],  # (N)
-                )  # scalar
+                    # Loss
+                    loss = criterion(
+                        predicted=predicted_moves,  # (N, n_moves, move_vocab_size)
+                        targets=batch["moves"][:, 1:],  # (N, n_moves)
+                        lengths=batch["lengths"],  # (N, 1)
+                    )  # scalar
+                    # Note: We don't pass the first move (the prompt
+                    # "<move>") as it is not a target/next-move of
+                    # anything
+
+                # "From" and "To" square prediction models
+                elif CONFIG.NAME.startswith(("CT-EFT-")):
+                    # Forward prop.
+                    predicted_from_squares, predicted_to_squares = model(
+                        batch
+                    )  # (N, 64), (N, 64)
+
+                    # Loss
+                    loss = criterion(
+                        predicted=predicted_from_squares,
+                        targets=batch["from_squares"],
+                        lengths=batch["lengths"],
+                    ) + criterion(
+                        predicted=predicted_to_squares,
+                        targets=batch["to_squares"],
+                        lengths=batch["lengths"],
+                    )  # scalar
+
+                # Other models
+                else:
+                    raise NotImplementedError
 
             # Keep track of losses
             losses.update(loss.item(), batch["lengths"].sum().item())
 
-            # Keep track of accuracy
-            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
-                targets=batch["moves"][:, 1],  # (N)
-                k=[1, 3, 5],
-            )
-            top1_accuracies.update(top1_accuracy, predicted_moves.shape[0])
-            top3_accuracies.update(top3_accuracy, predicted_moves.shape[0])
-            top5_accuracies.update(top5_accuracy, predicted_moves.shape[0])
+            # Keep track of accuracy (Direct) Move prediction models
+            if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
+                top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                    logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
+                    targets=batch["moves"][:, 1],  # (N)
+                    k=[1, 3, 5],
+                )
+
+            elif CONFIG.NAME.startswith(("CT-EFT-")):
+                top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
+                    logits=predicted_from_squares,  # (N, 64)
+                    targets=batch["from_squares"],  # (N)
+                    other_logits=predicted_to_squares,  # (N, 64)
+                    other_targets=batch["to_squares"],  # (N)
+                    k=[1, 3, 5],
+                )
+
+            else:
+                raise NotImplementedError
+            top1_accuracies.update(top1_accuracy, batch["lengths"].shape[0])
+            top3_accuracies.update(top3_accuracy, batch["lengths"].shape[0])
+            top5_accuracies.update(top5_accuracy, batch["lengths"].shape[0])
 
         # Log to tensorboard
         writer.add_scalar(

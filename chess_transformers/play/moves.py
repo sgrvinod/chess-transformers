@@ -71,7 +71,7 @@ def model_move(
         # Perform top-k sampling to obtain a legal predicted move
         legal_move_index = topk_sampling(
             logits=predicted_moves[
-                :, [vocabulary["move_sequence"][m] for m in legal_moves]
+                :, [vocabulary["moves"][m] for m in legal_moves]
             ],
             k=k,
         ).item()
