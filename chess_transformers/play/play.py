@@ -9,7 +9,6 @@ from chess_transformers.play.utils import get_pgn, in_notebook, print_text, prin
 
 def model_v_engine(
     model,
-    vocabulary,
     k,
     use_amp,
     model_color,
@@ -29,8 +28,6 @@ def model_v_engine(
     Args:
 
         model (torch.nn.Module): The model.
-
-        vocabulary (dict): The vocabulary.
 
         k (int): The "k" in "top-k" sampling, for sampling the model's
         predicted moves.
@@ -101,7 +98,6 @@ def model_v_engine(
                 board = model_move(
                     model=model,
                     board=board,
-                    vocabulary=vocabulary,
                     use_amp=use_amp,
                     k=k,
                     model_name=model_name,
@@ -156,7 +152,6 @@ def model_v_engine(
                     board = model_move(
                         model=model,
                         board=board,
-                        vocabulary=vocabulary,
                         use_amp=use_amp,
                         k=k,
                         model_name=model_name,
@@ -224,11 +219,9 @@ def model_v_engine(
 
 def model_v_model(
     model_w,
-    vocabulary_w,
     k_w,
     use_amp_w,
     model_b,
-    vocabulary_b,
     k_b,
     use_amp_b,
     rounds=1,
@@ -243,8 +236,6 @@ def model_v_model(
 
         model_w (torch.nn.Module): The model playing white.
 
-        vocabulary_w (dict): The vocabulary for the model playing white.
-
         k_w (int): The "k" in "top-k" sampling, for sampling the
         predicted moves of the model playing white.
 
@@ -252,8 +243,6 @@ def model_v_model(
         playing white?
 
         model_b (torch.nn.Module): The model playing black.
-
-        vocabulary_b (dict): The vocabulary for the model playing black.
 
         k_b (int): The "k" in "top-k" sampling, for sampling the
         predicted moves of the model playing black.
@@ -293,14 +282,12 @@ def model_v_model(
             board = model_move(
                 model=model_w,
                 board=board,
-                vocabulary=vocabulary_w,
                 use_amp=use_amp_w,
                 k=k_w,
             )
             board = model_move(
                 model=model_b,
                 board=board,
-                vocabulary=vocabulary_b,
                 use_amp=use_amp_b,
                 k=k_b,
             )
@@ -341,7 +328,6 @@ def model_v_model(
 def human_v_model(
     human_color,
     model,
-    vocabulary,
     k,
     use_amp,
     rounds=1,
@@ -359,8 +345,6 @@ def human_v_model(
         "b".
 
         model (torch.nn.Module): The model.
-
-        vocabulary (dict): The vocabulary.
 
         k (int): The "k" in "top-k" sampling, for sampling the model's
         predicted moves.
@@ -466,7 +450,6 @@ def human_v_model(
                 board = model_move(
                     model=model,
                     board=board,
-                    vocabulary=vocabulary,
                     use_amp=use_amp,
                     k=k,
                     show_board=False,
@@ -564,7 +547,7 @@ def human_v_model(
     return wins, losses, draws, pgns
 
 
-def warm_up(model, vocabulary):
+def warm_up(model):
     """
     Warm up a model by having it play a game against itself.
 
@@ -574,17 +557,13 @@ def warm_up(model, vocabulary):
     Args:
 
         model (torch.nn.Module): The model
-
-        vocabulary (dict): The vocabulary.
     """
     with io.capture_output():
         _ = model_v_model(
             model_w=model,
-            vocabulary_w=vocabulary,
             k_w=1,
             use_amp_w=True,
             model_b=model,
-            vocabulary_b=vocabulary,
             k_b=1,
             use_amp_b=True,
         )

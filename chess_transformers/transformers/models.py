@@ -60,6 +60,8 @@ class ChessTransformer(nn.Module):
         """
         super(ChessTransformer, self).__init__()
 
+        self.code = "ED"
+
         self.vocab_sizes = CONFIG.VOCAB_SIZES
         self.n_moves = CONFIG.N_MOVES
         self.d_model = CONFIG.D_MODEL
@@ -262,6 +264,8 @@ class ChessTransformerEncoder(nn.Module):
         """
         super(ChessTransformerEncoder, self).__init__()
 
+        self.code = "E"
+
         self.vocab_sizes = CONFIG.VOCAB_SIZES
         self.d_model = CONFIG.D_MODEL
         self.n_heads = CONFIG.N_HEADS
@@ -431,6 +435,8 @@ class ChessTransformerEncoderFT(nn.Module):
                 DROPOUT (int): The dropout probability.
         """
         super(ChessTransformerEncoderFT, self).__init__()
+
+        self.code = "EFT"
 
         self.vocab_sizes = CONFIG.VOCAB_SIZES
         self.d_model = CONFIG.D_MODEL

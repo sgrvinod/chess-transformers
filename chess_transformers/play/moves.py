@@ -4,12 +4,13 @@ from IPython.display import clear_output, Markdown, display
 
 from chess_transformers.play.utils import (
     get_model_inputs,
-    get_legal_moves,
+    is_pawn_promotion,
     topk_sampling,
     print_board,
     print_text,
     in_notebook,
 )
+from chess_transformers.data.levels import SQUARES, UCI_MOVES
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -17,7 +18,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def model_move(
     model,
     board,
-    vocabulary,
     use_amp,
     k,
     model_name=None,
@@ -29,11 +29,12 @@ def model_move(
 
     Args:
 
+        config_name (str): The name of the model configuration (which
+        describes the type of model).
+
         model (torch.nn.Module): The model.
 
         board (chess.Board): The chessboard in its current state.
-
-        vocabulary (dict): The vocabulary.
 
         use_amp (bool): Use automatic mixed precision?
 
@@ -56,29 +57,87 @@ def model_move(
     # Get predictions
     model.eval()
     with torch.no_grad():
-        with torch.autocast(
-            device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
-        ):
-            model_inputs = get_model_inputs(board, vocabulary)
-            predicted_moves = model(
-                model_inputs
-            )  # (1, max_move_sequence_length, move_vocab_size)
-        predicted_moves = predicted_moves[:, 0, :]  # (1, move_vocab_size)
-
         # Get list of legal moves for the current position
-        legal_moves = get_legal_moves(board, vocabulary)
+        legal_moves = [move.uci() for move in board.legal_moves]
 
-        # Perform top-k sampling to obtain a legal predicted move
-        legal_move_index = topk_sampling(
-            logits=predicted_moves[
-                :, [vocabulary["moves"][m] for m in legal_moves]
-            ],
-            k=k,
-        ).item()
-        model_move = legal_moves[legal_move_index]
+        # Get model inputs
+        model_inputs = get_model_inputs(board)
+
+        # (Direct) Move prediction models
+        if model.code in {"E", "ED"}:
+            with torch.autocast(
+                device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
+            ):
+                predicted_moves = model(model_inputs)
+            predicted_moves = predicted_moves[:, 0, :]  # (1, move_vocab_size)
+
+            # Filter out move indices corresponding to illegal moves
+            legal_move_indices = [UCI_MOVES[m] for m in legal_moves]
+
+            # Perform top-k sampling to obtain a legal predicted move
+            legal_move_index = topk_sampling(
+                logits=predicted_moves[:, legal_move_indices],
+                k=k,
+            ).item()
+            model_move = legal_moves[legal_move_index]
+
+        # "From" and "To" square prediction models
+        elif model.code in {"EFT"}:
+            with torch.autocast(
+                device_type=DEVICE.type, dtype=torch.float16, enabled=use_amp
+            ):
+                predicted_from_squares, predicted_to_squares = model(
+                    model_inputs
+                )  # (1, 1, 64), (1, 1, 64)
+            predicted_from_squares = predicted_from_squares[:, 0, :]  # (1, 64)
+            predicted_to_squares = predicted_to_squares[:, 0, :]  # (1, 64)
+
+            # Convert "From" and "To" square predictions to move predictions
+            predicted_from_log_probabilities = torch.log_softmax(
+                predicted_from_squares, dim=-1
+            ).unsqueeze(
+                2
+            )  # (1, 64, 1)
+            predicted_to_log_probabilities = torch.log_softmax(
+                predicted_to_squares, dim=-1
+            ).unsqueeze(
+                1
+            )  # (1, 1, 64)
+            predicted_moves = (
+                predicted_from_log_probabilities + predicted_to_log_probabilities
+            ).view(
+                1, -1
+            )  # (1, 64 * 64)
+
+            # Filter out move indices corresponding to illegal moves
+            legal_moves = list(
+                set([m[:4] for m in legal_moves])
+            )  # for handing pawn promotions manually, remove pawn promotion targets
+            legal_move_indices = list()
+            for m in legal_moves:
+                from_square = m[:2]
+                to_square = m[2:4]
+                legal_move_indices.append(
+                    SQUARES[from_square] * 64 + SQUARES[to_square]
+                )
+
+            # Perform top-k sampling to obtain a legal predicted move
+            legal_move_index = topk_sampling(
+                logits=predicted_moves[:, legal_move_indices],
+                k=k,
+            ).item()
+            model_move = legal_moves[legal_move_index]
+
+            # Handle pawn promotion manually if "model_move" is a pawn promotion move
+            if is_pawn_promotion(board, model_move):
+                model_move = model_move + "q"  # always promote to a queen
+
+        # Other models
+        else:
+            raise NotImplementedError
 
         # Move
-        board.push_uci(model_move.lower())
+        board.push_uci(model_move)
         if show_board:
             clear_output(wait=True)
             if opponent_name and len(board.move_stack) > 1:

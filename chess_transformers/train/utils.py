@@ -137,12 +137,12 @@ def topk_accuracy(logits, targets, other_logits=None, other_targets=None, k=[1, 
 
     Args:
 
-        logits (torch.FloatTensor): Predicted probabilities, of size (N,
+        logits (torch.FloatTensor): Predicted logits, of size (N,
         vocab_size).
 
         targets (torch.LongTensor): Actual targets, of size (N).
 
-        other_logits (torch.FloatTensor, optional): Predicted probabilities for a
+        other_logits (torch.FloatTensor, optional): Predicted logits for a
         second predicted variable, if any, of size (N, other_vocab_size).
         Defaults to None.
 

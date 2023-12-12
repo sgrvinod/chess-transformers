@@ -9,6 +9,7 @@ import textwrap
 import chess.pgn
 import chess.engine
 import torch.utils.data
+import torch.nn.functional as F
 from datetime import date
 from tabulate import tabulate
 from bs4 import BeautifulSoup
@@ -17,6 +18,7 @@ from contextlib import contextmanager
 from colorama import Fore, Back, Style
 
 from chess_transformers.data.utils import encode, parse_fen
+from chess_transformers.data.levels import TURN, PIECES, UCI_MOVES, BOOL
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,9 +40,9 @@ UNICODE_CHESS_PIECES = {
 }
 
 
-def load_assets(CONFIG):
+def load_model(CONFIG):
     """
-    Load assets for inference. This includes the model and vocabulary.
+    Load model for inference.
 
     Args:
 
@@ -49,8 +51,6 @@ def load_assets(CONFIG):
     Returns:
 
         torch.nn.Module: The model.
-
-        dict: The vocabulary.
     """
     # Model
     _model = CONFIG.MODEL(CONFIG).to(DEVICE)
@@ -58,7 +58,7 @@ def load_assets(CONFIG):
     # Download checkpoint and vocabulary if they haven't already been
     # downloaded
     checkpoint_folder = (
-        pathlib.Path(__file__).parent.parent.resolve() / "checkpoints" / CONFIG.NAME
+        pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / CONFIG.NAME
     )
     checkpoint_folder.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_folder / CONFIG.FINAL_CHECKPOINT
@@ -66,12 +66,6 @@ def load_assets(CONFIG):
         print("\nCannot find model checkpoint on disk; will download.")
         gdown.download(
             id=CONFIG.FINAL_CHECKPOINT_GDID, output=str(checkpoint_path), quiet=False
-        )
-    vocabulary_path = checkpoint_folder / "vocabulary.json"
-    if not vocabulary_path.exists():
-        print("\nCannot find vocabulary on disk; will download.")
-        gdown.download(
-            id=CONFIG.VOCABULARY_GDID, output=str(vocabulary_path), quiet=False
         )
 
     # Load checkpoint
@@ -87,15 +81,7 @@ def load_assets(CONFIG):
     )
     model.eval()  # eval mode disables dropout
 
-    # Load vocabulary
-    vocabulary = json.load(open(str(vocabulary_path)))
-    for vocabulary_name in vocabulary:
-        if set(vocabulary[vocabulary_name].keys()).issubset({"true", "false"}):
-            for bool_string in set(vocabulary[vocabulary_name].keys()):
-                index = vocabulary[vocabulary_name].pop(bool_string)
-                vocabulary[vocabulary_name][bool_string == "true"] = index
-
-    return model, vocabulary
+    return model
 
 
 def load_engine(path):
@@ -140,15 +126,13 @@ def load_engine(path):
     return engn
 
 
-def get_model_inputs(board, vocabulary):
+def get_model_inputs(board):
     """
-    Get inputs to be fed to a model for predicting the next move.
+    Get inputs to be fed to a model.
 
     Args:
 
         board (chess.Board): The chessboard in its current state.
-
-        vocabulary (dict): The vocabulary.
 
     Returns:
 
@@ -158,48 +142,28 @@ def get_model_inputs(board, vocabulary):
 
     t, b, wk, wq, bk, bq = parse_fen(board.fen())
     model_inputs["turns"] = (
-        torch.IntTensor([encode(t, vocabulary=vocabulary["turn"])])
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor([encode(t, vocabulary=TURN)]).unsqueeze(0).to(DEVICE)
     )
     model_inputs["board_positions"] = (
-        torch.IntTensor(encode(b, vocabulary=vocabulary["board_position"]))
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor(encode(b, vocabulary=PIECES)).unsqueeze(0).to(DEVICE)
     )
     model_inputs["white_kingside_castling_rights"] = (
-        torch.IntTensor(
-            [encode(wk, vocabulary=vocabulary["white_kingside_castling_rights"])]
-        )
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor([encode(wk, vocabulary=BOOL)]).unsqueeze(0).to(DEVICE)
     )
     model_inputs["white_queenside_castling_rights"] = (
-        torch.IntTensor(
-            [encode(wq, vocabulary=vocabulary["white_queenside_castling_rights"])]
-        )
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor([encode(wq, vocabulary=BOOL)]).unsqueeze(0).to(DEVICE)
     )
     model_inputs["black_kingside_castling_rights"] = (
-        torch.IntTensor(
-            [encode(bk, vocabulary=vocabulary["black_kingside_castling_rights"])]
-        )
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor([encode(bk, vocabulary=BOOL)]).unsqueeze(0).to(DEVICE)
     )
     model_inputs["black_queenside_castling_rights"] = (
-        torch.IntTensor(
-            [encode(bq, vocabulary=vocabulary["black_queenside_castling_rights"])]
-        )
-        .unsqueeze(0)
-        .to(DEVICE)
+        torch.IntTensor([encode(bq, vocabulary=BOOL)]).unsqueeze(0).to(DEVICE)
     )
     model_inputs["moves"] = (
         torch.LongTensor(
             [
-                vocabulary["moves"]["<move>"],
-                vocabulary["moves"]["<pad>"],
+                UCI_MOVES["<move>"],
+                UCI_MOVES["<pad>"],
             ]
         )
         .unsqueeze(0)
@@ -210,65 +174,40 @@ def get_model_inputs(board, vocabulary):
     return model_inputs
 
 
-def capitalize_pawn_promotion_piece(uci_move):
+def is_pawn_promotion(board, move):
     """
-    A function that capitalizes the target piece in the UCI notation for
-    a pawn promotion move. For example, "d7d8q" is transformed into
-    "d7d8Q".
-
-    This is done because the move vocabularies for some datasets have
-    the target piece capitalized, but this is not the case in UCI
-    notation. When this is fixed during data preprocessing, this
-    function will no longer be needed.
+    Check if a move (in UCI notation) corresponds to a pawn promotion on
+    the given board.
 
     Args:
 
-        uci_move (str): The UCI notation of the pawn promotion move.
+        board (chess.Board): The chessboard in its current state.
+
+        move (str): The move un UCI notation.
 
     Returns:
 
-        str: The UCI notation of the pawn promotion move with the target
-        piece capitalized.
+        bool: Is the move a pawn promotion?
     """
-    if len(uci_move) == 5:
-        uci_move = uci_move[:-1] + uci_move[-1].upper()
 
-    return uci_move
-
-
-def get_legal_moves(board, vocabulary):
-    """
-    Get a list of legal moves that can be made on the board in its
-    current state, and are also in the model's vocabulary.
-
-    Args:
-
-        board (chess.Board): The board in its current state.
-
-        vocabulary (vocabulary): The vocabulary.
-
-    Returns:
-
-        list: A list of legal moves.
-    """
-    legal_moves = list()
-    for legal_move in board.legal_moves:
-        legal_move = capitalize_pawn_promotion_piece(str(legal_move))
-        if legal_move in vocabulary["moves"]:
-            legal_moves.append(legal_move)
-
-    return legal_moves
+    m = chess.Move.from_uci(move)
+    if board.piece_type_at(m.from_square) == chess.PAWN and chess.square_rank(
+        m.to_square
+    ) in [0, 7]:
+        return True
+    else:
+        return False
 
 
 def topk_sampling(logits, k=1):
     """
-    Randomly sample from the multinomial distribution formed by the
+    Randomly sample from the multinomial distribution formed from the
     "top-k" logits only.
 
     Args:
 
-        logits (torch.FloatTensor): Predicted next-move probabilities,
-        of size (N, move_vocab_size).
+        logits (torch.FloatTensor): Predicted logits, of size (N,
+        vocab_size).
 
         k (int, optional): Value of "k". Defaults to 1.
 
@@ -278,18 +217,11 @@ def topk_sampling(logits, k=1):
     """
     k = min(k, logits.shape[1])
 
-    # Find the kth-highest logit value per row
-    max_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
-
-    # All other logit values must be ignored; they should evaluate to 0
-    # under a softmax op.
-    logits[logits < max_logit_values] = -float("inf")  #  (N, move_vocab_size)
-
-    # Apply softmax
-    probabilities = torch.softmax(logits, dim=1)  #  (N, move_vocab_size)
-
-    # Sample from this multinomial probability distribution
-    samples = torch.multinomial(probabilities, num_samples=1).squeeze(1)  #  (N)
+    with torch.no_grad():
+        min_topk_logit_values = logits.topk(k=k, dim=1)[0][:, -1:]  # (N, 1)
+        logits[logits < min_topk_logit_values] = -float("inf")  #  (N, vocab_size)
+        probabilities = F.softmax(logits, dim=1)  #  (N, vocab_size)
+        samples = torch.multinomial(probabilities, num_samples=1).squeeze(1)  #  (N)
 
     return samples
 
