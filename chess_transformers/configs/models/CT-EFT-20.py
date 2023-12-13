@@ -1,4 +1,3 @@
-import os
 import torch
 import pathlib
 
@@ -78,16 +77,16 @@ USE_AMP = True  # use automatic mixed precision training?
 CRITERION = LabelSmoothedCE  # training criterion (loss)
 OPTIMIZER = torch.optim.Adam  # optimizer
 LOGS_FOLDER = str(
-        pathlib.Path(__file__).parent.parent.parent.resolve() / "train" / "logs" / NAME
-    )  # logs folder
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "train" / "logs" / NAME
+)  # logs folder
 
 ###############################
 ######### Checkpoints #########
 ###############################
 
 CHECKPOINT_FOLDER = str(
-        pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
-    )  # folder containing checkpoints
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
+)  # folder containing checkpoints
 TRAINING_CHECKPOINT = (
     NAME + ".pt"
 )  # path to model checkpoint to resume training, None if none
@@ -106,5 +105,5 @@ FINAL_CHECKPOINT = (
 ################################
 
 EVAL_GAMES_FOLDER = str(
-        pathlib.Path(__file__).parent.parent.parent.resolve() / "eval" / "games" / NAME
-    ) # folder where evaluation games are saved in PGN files
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "eval" / "games" / NAME
+)  # folder where evaluation games are saved in PGN files

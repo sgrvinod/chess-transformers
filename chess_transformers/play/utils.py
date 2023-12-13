@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import chess
 import gdown
 import pathlib
@@ -58,7 +57,7 @@ def load_model(CONFIG):
     # Download checkpoint and vocabulary if they haven't already been
     # downloaded
     checkpoint_folder = (
-        pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / CONFIG.NAME
+        pathlib.Path(__file__).parent.parent.resolve() / "checkpoints" / CONFIG.NAME
     )
     checkpoint_folder.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_folder / CONFIG.FINAL_CHECKPOINT
@@ -84,25 +83,17 @@ def load_model(CONFIG):
     return model
 
 
-def load_engine(path):
+def show_engine_options(engine):
     """
-    Load a chess engine. Print the available UCI configuration options
-    for the engine.
+    Display available UCI configuration options for a chess engine.
 
     Args:
 
-        path (str): The path to the engine file (an executable).
-
-    Returns:
-
-        chess.engine.SimpleEngine: The chess engine.
+        engine (chess.engine.SimpleEngine): The chess engine.
     """
-    engn = chess.engine.SimpleEngine.popen_uci(path)
-
-    # Show options
-    print("Engine loaded with UCI options:\n")
+    print("\nUCI options for chess engine:\n")
     table = list()
-    for item, option in dict(engn.options).items():
+    for item, option in dict(engine.options).items():
         table.append(
             [
                 item,
@@ -123,7 +114,27 @@ def load_engine(path):
         )
     )
 
-    return engn
+
+def load_engine(path, show_options=True):
+    """
+    Load a chess engine.
+
+    Args:
+
+        path (str): The path to the engine file (an executable).
+
+        show_options (bool, optional): Print configurable UCI options for engine.
+
+    Returns:
+
+        chess.engine.SimpleEngine: The chess engine.
+    """
+    engine = chess.engine.SimpleEngine.popen_uci(path)
+
+    if show_options:
+        show_engine_options(engine)
+
+    return engine
 
 
 def get_model_inputs(board):

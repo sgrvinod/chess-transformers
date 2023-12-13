@@ -6,29 +6,6 @@ import pathlib
 import torch.nn.functional as F
 
 
-def get_vocab_sizes(data_folder, vocab_file):
-    """
-    Get sizes of all vocabularies in the vocabulary file.
-
-    Args:
-
-        data_folder (str): The folder containing all data files.
-
-        vocab_file (str): The vocabulary file.
-
-    Returns:
-
-        dict: A dictionary containing the sizes of each vocabulary in
-        the vocabulary file.
-    """
-    vocabulary = json.load(open(os.path.join(data_folder, vocab_file), "r"))
-    vocab_sizes = dict()
-    for k in vocabulary:
-        vocab_sizes[k] = len(vocabulary[k])
-
-    return vocab_sizes
-
-
 def get_lr(step, d_model, warmup_steps):
     """
     The LR schedule. This version below is twice the definition in the

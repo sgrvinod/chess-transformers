@@ -1,13 +1,14 @@
-import os
 import torch
+import pathlib
 
+from chess_transformers.train.utils import get_lr
 from chess_transformers.configs.data.LE1222 import *
 from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDataset
 from chess_transformers.configs.other.fairy_stockfish import *
-from chess_transformers.train.utils import get_lr, get_vocab_sizes
 from chess_transformers.transformers.models import ChessTransformer
 from chess_transformers.transformers.criteria import LabelSmoothedCE
+from chess_transformers.data.levels import TURN, PIECES, UCI_MOVES, BOOL
 
 
 ###############################
@@ -30,7 +31,15 @@ PIN_MEMORY = False  # pin to GPU memory when dataloading?
 ############ Model ############
 ###############################
 
-VOCAB_SIZES = get_vocab_sizes(DATA_FOLDER, VOCAB_FILE)  # vocabulary sizes
+VOCAB_SIZES = {
+    "moves": len(UCI_MOVES),
+    "turn": len(TURN),
+    "white_kingside_castling_rights": len(BOOL),
+    "white_queenside_castling_rights": len(BOOL),
+    "black_kingside_castling_rights": len(BOOL),
+    "black_queenside_castling_rights": len(BOOL),
+    "board_position": len(PIECES),
+}  # vocabulary sizes
 D_MODEL = 512  # size of vectors throughout the transformer model
 N_HEADS = 8  # number of heads in the multi-head attention
 D_QUERIES = 64  # size of query vectors (and also the size of the key vectors) in the multi-head attention
@@ -67,18 +76,16 @@ BOARD_STATUS_LENGTH = 70  # total length of input sequence
 USE_AMP = True  # use automatic mixed precision training?
 CRITERION = LabelSmoothedCE  # training criterion (loss)
 OPTIMIZER = torch.optim.Adam  # optimizer
-LOGS_FOLDER = (
-    os.path.join(os.environ.get("CT_LOGS_FOLDER"), NAME)
-    if os.environ.get("CT_LOGS_FOLDER")
-    else None
+LOGS_FOLDER = str(
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "train" / "logs" / NAME
 )  # logs folder
 
 ###############################
 ######### Checkpoints #########
 ###############################
 
-CHECKPOINT_FOLDER = os.path.join(
-    os.environ.get("CT_CHECKPOINTS_FOLDER"), NAME
+CHECKPOINT_FOLDER = str(
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
 )  # folder containing checkpoints
 TRAINING_CHECKPOINT = (
     NAME + ".pt"
@@ -92,19 +99,11 @@ CHECKPOINT_AVG_SUFFIX = (
 FINAL_CHECKPOINT = (
     "averaged_" + NAME + ".pt"
 )  # final checkpoint to be used for eval/inference
-FINAL_CHECKPOINT_GDID = (
-    "1A-IOMBkJ1mZJmAVGhBZNmPI5E94lsWYb"  # File ID on Google Drive for downloading
-)
-VOCABULARY_GDID = (
-    "1Vf0BjLN8iN7qE3FaT_FoRRPg9Lw8IDvH"  # File ID on Google Drive for download
-)
 
 ################################
 ########## Evaluation ##########
 ################################
 
-EVAL_GAMES_FOLDER = (
-    os.path.join(os.environ.get("CT_EVAL_GAMES_FOLDER"), NAME)
-    if os.environ.get("CT_EVAL_GAMES_FOLDER")
-    else None
-)  # folder where games against Stockfish are saved in PGN files
+EVAL_GAMES_FOLDER = str(
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "eval" / "games" / NAME
+)  # folder where evaluation games are saved in PGN files
