@@ -3,6 +3,7 @@ __all__ = [
     "configs",
     "data",
     "train",
-    "eval",
+    "evaluate",
     "play",
+    "visualise"
 ]
