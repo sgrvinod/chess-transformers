@@ -5,5 +5,4 @@ __all__ = [
     "train",
     "evaluate",
     "play",
-    "visualise"
 ]

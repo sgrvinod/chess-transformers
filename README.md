@@ -4,7 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.1.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.2.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
 *Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
@@ -33,10 +33,10 @@ To install *Chess Transformers*, clone this repository and install as a Python p
 ```
 gh repo clone sgrvinod/chess-transformers
 cd chess-transformers
-pip install -e .
+pip install .
 ```
 
-If you are planning to develop or contribute to the codebase, install the package in <ins>editable mode</ins>, using the `-e` flag.
+If you are planning to develop or contribute or make changes to the codebase, install the package in <ins>editable mode</ins>, using the `-e` flag.
 
 ```
 pip install -e .
@@ -46,28 +46,39 @@ pip install -e .
 
   - Set **`CT_DATA_FOLDER`** to the folder on your computer where you have the training data. You <ins>do not</ins> need to set this if you do not plan to train any models. 
 
-  - Set **`CT_CHECKPOINTS_FOLDER`** to the folder on your computer where you want to save model checkpoints during training. You <ins>do not</ins> need to set this if you do not plan to train any models.
-    
-  - Set **`CT_LOGS_FOLDER`** to the folder on your computer where you wish to save training logs. You <ins>do not</ins> need to set this if you do not plan to train any models.
-     
   - Set **`CT_STOCKFISH_PATH`** to the executable of the Stockfish 16 chess engine. You <ins>do not</ins> need to set this if you do not plan to have a model play against this chess engine.
 
   - Set **`CT_FAIRY_STOCKFISH_PATH`** to the executable of the Fairy Stockfish chess engine. You <ins>do not</ins> need to set this if you do not plan to have a model play against this chess engine.
 
-  - Set **`CT_EVAL_GAMES_FOLDER`** to the folder where you want to save PGN files for evaluation games. You <ins>do not</ins> need to set this if you do not plan to evaluate any models.
-
 ## Models
 
-There are currently two models available for use in *Chess Transformers*.
+There are currently three models available for use in *Chess Transformers*.
 
-|         Model Name          | # Params |      Training Data      |            Architecture             |                                                                 Predictions                                                                  |
-| :-------------------------: | :------: | :---------------------: | :---------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------: |
-|  [***CT-E-20***](#ct-e-20)  |   20M    | [***LE1222***](#le1222) |      Transformer encoder only       |                                                 Best next half-move (or ply) <br> eg. *f2e3*                                                 |
-| [***CT-ED-45***](#ct-ed-45) |   45M    | [***LE1222***](#le1222) | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *f2e3* -> *b4b3* -> *e3h6* -> *b3b2* -> *g4e6* -> *g8f8* -> *g3g7* -> *f8e8* -> *g7f7* -> *loses* |
+|          Model Name           | # Params |      Training Data      |            Architecture             |                                                                 Predictions                                                                  |
+| :---------------------------: | :------: | :---------------------: | :---------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------: |
+|   [***CT-E-20***](#ct-e-20)   |   20M    | [***LE1222***](#le1222) |      Transformer encoder only       |                                                 Best next half-move (or ply) <br> eg. *f2e3*                                                 |
+| [***CT-EFT-20***](#ct-eft-20) |   20M    | [***LE1222***](#le1222) |      Transformer encoder only       |                            Best *From* and *To* squares corresponding to the next half-move eg. from *f2* to *e3*                            |
+|  [***CT-ED-45***](#ct-ed-45)  |   45M    | [***LE1222***](#le1222) | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *f2e3* -> *b4b3* -> *e3h6* -> *b3b2* -> *g4e6* -> *g8f8* -> *g3g7* -> *f8e8* -> *g7f7* -> *loses* |
+
+All models are evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at increasing strength levels 1 to 6, [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
+
+<p align="center">
+  <img src="img/win_ratio.png"/>
+</p>
+
+At each strength level of the chess engine, $n=1000$ games are played by the model, i.e. $500$ games each with black and white pieces. 
+
+Win ratios and the difference between the Elo rating of the model and the chess engine are calculated from these games' outcomes.
+
+<p align="center">
+  <img src="img/elo_difference.png"/>
+</p>
+
+Detailed evaluation results for each model are provided below.
 
 ### *CT-E-20*
 
-[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://drive.google.com/drive/folders/1QA5Hax0aOn3VoXjUtkmnECp0ZV78wGtb?usp=drive_link) | 
+[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://drive.google.com/file/d/18Er4LbdujG-qiPPoqORvMQVcsiFerqY4/view?usp=drive_link) | 
 [**TensorBoard Logs**](https://drive.google.com/drive/folders/1WwWJS4804uKrONPcCtyQSGlOSUlo05-0?usp=drive_link) 
 
 This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation).
@@ -81,34 +92,77 @@ This is essentially a sequence (or image) classification task, where the sequenc
 *CT-E-20* contains about 20 million parameters.
 
 ```python
-from chess_transformers.play import load_assets
+from chess_transformers.play import load_model
 from chess_transformers.configs import import_config
 
 CONFIG = import_config("CT-E-20")
-model, vocabulary = load_assets(CONFIG)
+model = load_model(CONFIG)
 ```
 
-You <ins>do not</ins> need to download the model checkpoint or vocabulary manually. They will be downloaded automatically if required.
+You <ins>do not</ins> need to download the model checkpoint manually. It will be downloaded automatically if required.
 
-#### Model Skill
+#### Model Strength
 
-*CT-E-20* was evaluated against the Fairy Stockfish chess engine at various skill levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess, with the engine running on an AMD Ryzen 7 3800X 8-Core Processor.
+*CT-E-20* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
 These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-20/).
 
-| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
-| :-----------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
-|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$      |           $LOS$           |
-|     **1**     | 1000  |  987  |   0    |  13   |         **99.35%**          | 873.70 <br> *(± 105.58)* |          100.00%          |
-|     **2**     | 1000  |  984  |   0    |  16   |         **99.20%**          | 837.37 <br> *(± 92.90)*  |          100.00%          |
-|     **3**     | 1000  |  854  |   72   |  74   |         **89.10%**          | 364.98 <br> *(± 31.32)*  |          100.00%          |
-|     **4**     | 1000  |  551  |  330   |  119  |         **61.05%**          |  78.07 <br> *(± 20.68)*  |          100.00%          |
-|     **5**     | 1000  |  361  |  503   |  136  |         **42.90%**          | -49.67 <br> *(± 20.21)*  |           0.00%           |
-|     **6**     | 1000  |  53   |  897   |  50   |          **7.80%**          | -429.05 <br> *(± 36.92)* |           0.00%           |
+| Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
+| :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
+|      $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$      |           $LOS$           |
+|     **1**      | 1000  |  989  |   0    |  11   |         **99.45%**          | 902.90 <br> *(± 117.67)* |          100.00%          |
+|     **2**      | 1000  |  980  |   0    |  20   |         **99.00%**          | 798.25 <br> *(± 81.48)*  |          100.00%          |
+|     **3**      | 1000  |  872  |   61   |  67   |         **90.55%**          | 392.58 <br> *(± 33.31)*  |          100.00%          |
+|     **4**      | 1000  |  431  |  455   |  114  |         **48.80%**          |  -8.34 <br> *(± 20.30)*  |          21.00%           |
+|     **5**      | 1000  |  205  |  685   |  110  |         **26.00%**          | -181.70 <br> *(± 22.78)* |           0.00%           |
+|     **6**      | 1000  |  24   |  952   |  24   |          **3.60%**          | -571.11 <br> *(± 54.08)* |           0.00%           |
+
+
+### *CT-EFT-20*
+
+[**Configuration File**](chess_transformers/configs/models/CT-EFT-20.py) | [**Checkpoint**](https://drive.google.com/file/d/1OHtg336ujlOjp5Kp0KjE1fAPF74aZpZD/view?usp=drive_link) | 
+[**TensorBoard Logs**](https://drive.google.com/drive/folders/1gD-msDgMlRqjB7Y0DIGWZxKgsxjqIwQp?usp=drive_link) 
+
+This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. Two classification heads operate upon the encoder outputs at all chessboard squares to predict the best candidates for the source (*From*) and destination (*To*) squares that correspond to the best half-move to be made.
+
+<p align="center">
+  <img src="img/ct_eft_20.png"/>
+</p>
+
+This is essentially a sequence (or image) labeling task, where the sequence is the current state of the chessboard, and each square competes to be labeled as the *From* or *To* square.
+
+*CT-E-20* contains about 20 million parameters.
+
+```python
+from chess_transformers.play import load_model
+from chess_transformers.configs import import_config
+
+CONFIG = import_config("CT-EFT-20")
+model = load_model(CONFIG)
+```
+
+You <ins>do not</ins> need to download the model checkpoint manually. It will be downloaded automatically if required.
+
+#### Model Strength
+
+*CT-EFT-20* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
+
+These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT-20/).
+
+| Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference       | Likelihood of Superiority |
+| :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :-----------------------: | :-----------------------: |
+|      $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$       |           $LOS$           |
+|     **1**      | 1000  |  994  |   0    |   6   |         **99.70%**          | 1008.63 <br> *(± 190.18)* |          100.00%          |
+|     **2**      | 1000  |  988  |   0    |  12   |         **99.40%**          | 887.69 <br> *(± 111.13)*  |          100.00%          |
+|     **3**      | 1000  |  942  |   11   |  47   |         **96.55%**          |  578.77 <br> *(± 48.57)*  |          100.00%          |
+|     **4**      | 1000  |  697  |  192   |  111  |         **75.25%**          |  193.17 <br> *(± 23.08)*  |          100.00%          |
+|     **5**      | 1000  |  482  |  379   |  139  |         **55.15%**          |  35.91 <br> *(± 20.09)*   |          99.98%           |
+|     **6**      | 1000  |  61   |  872   |  67   |          **9.45%**          | -392.58 <br> *(± 33.31)*  |           0.00%           |
+
 
 ### *CT-ED-45*
 
-[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://drive.google.com/drive/folders/1rT2-wA4vOyBOb2lj8dY22ofoNIv8BgCT?usp=drive_link) | 
+[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://drive.google.com/file/d/1zasRpPmZQVtAqumet9XMy1FBpmxxiM4L/view?usp=drive_link) | 
 [**TensorBoard Logs**](https://drive.google.com/drive/folders/1LGsKMsjFRjQBS56UJZTjegFMl7amIbSw?usp=drive_link) 
 
 This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made next, followed by the likely course of the game an arbitrary number of half-moves into the future. 
@@ -124,27 +178,27 @@ We are ultimately only interested in the very first half-move. Nevertheless, the
 *CT-ED-45* contains about 45 million parameters.
 
 ```python
-from chess_transformers.play import load_assets
+from chess_transformers.play import load_model
 from chess_transformers.configs import import_config
 
 CONFIG = import_config("CT-ED-45")
-model, vocabulary = load_assets(CONFIG)
+model = load_model(CONFIG)
 ```
-You <ins>do not</ins> need to download the model checkpoint or vocabulary manually. They will be downloaded automatically if required.
+You <ins>do not</ins> need to download the model checkpoint manually. It will be downloaded automatically if required.
 
-#### Model Skill
+#### Model Strength
 
-*CT-ED-45* was evaluated against the Fairy Stockfish chess engine at various skill levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess, with the engine running on an AMD Ryzen 7 3800X 8-Core Processor.
+*CT-ED-45* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
-| Lichess Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
-| :-----------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
-|     $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$      |           $LOS$           |
-|     **1**     | 1000  |  991  |   0    |   9   |         **99.55%**          | 937.93 <br> *(± 135.31)* |          100.00%          |
-|     **2**     | 1000  |  976  |   0    |  24   |         **98.80%**          | 766.23 <br> *(± 73.45)*  |          100.00%          |
-|     **3**     | 1000  |  695  |  214   |  91   |         **74.05%**          | 182.16 <br> *(± 23.12)*  |          100.00%          |
-|     **4**     | 1000  |  251  |  666   |  83   |         **29.25%**          | -153.44 <br> *(± 22.50)* |           0.00%           |
-|     **5**     | 1000  |  130  |  790   |  80   |         **17.00%**          | -275.45 <br> *(± 26.67)* |           0.00%           |
-|     **6**     | 1000  |   6   |  969   |  25   |          **1.85%**          | -689.89 <br> *(± 67.79)* |           0.00%           |
+| Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference       | Likelihood of Superiority |
+| :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :-----------------------: | :-----------------------: |
+|      $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$       |           $LOS$           |
+|     **1**      | 1000  |  976  |   0    |  24   |         **98.80%**          |  766.23 <br> *(± 73.45)*  |          100.00%          |
+|     **2**      | 1000  |  977  |   2    |  21   |         **98.75%**          |  759.05 <br> *(± 78.19)*  |          100.00%          |
+|     **3**      | 1000  |  676  |  244   |  80   |         **71.60%**          |  160.64 <br> *(± 22.72)*  |          100.00%          |
+|     **4**      | 1000  |  195  |  726   |  79   |         **23.45%**          | -205.52 <br> *(± 24.04)*  |           0.00%           |
+|     **5**      | 1000  |  67   |  895   |  38   |          **8.60%**          | -410.58 <br> *(± 36.41)*  |           0.00%           |
+|     **6**      | 1000  |   6   |  987   |   7   |          **0.95%**          | -807.25 <br> *(± 113.69)* |           0.00%           |
 
 ## Datasets
 
@@ -180,10 +234,6 @@ It consists of the following files:
   - **`black_queenside_castling_rights`**, whether black can castle queenside
   - **`move_sequence`**, 10 half-moves into the future made by both players
   - **`move_sequence_length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
-- **`vocabulary.json`**, consisting of mappings between raw data and the indices they are encoded as in the HDF5 file, for all variables
-- **`splits.json`**, consisting of the index in the tables at which the dataset is split into training and validation data
-
-You can ignore any file that is named **`#.fens`** or **`#.moves`** — these are intermediate files from the dataset creation process.
 
 ### *LE1222x*
 
@@ -209,10 +259,6 @@ It consists of the following files:
   - **`black_queenside_castling_rights`**, whether black can castle queenside
   - **`move_sequence`**, 10 half-moves into the future made by both players
   - **`move_sequence_length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
-- **`vocabulary.json`**, consisting of mappings between raw data and the indices they are encoded as in the HDF5 file, for all variables
-- **`splits.json`**, consisting of the index in the tables at which the dataset is split into training and validation data
-
-You can ignore any file that is named **`#.fens`** or **`#.moves`** — these are intermediate files from the dataset creation process.
 
 ## Play
 
@@ -226,26 +272,24 @@ You could either play in a Jupyter notebook (recommended for better UI) or in a 
 import os
 from chess_transformers.configs import import_config
 from chess_transformers.play.utils import write_pgns
-from chess_transformers.play import load_assets, warm_up, human_v_model 
+from chess_transformers.play import load_model, warm_up, human_v_model 
 
 # Load configuration
 config_name = "CT-E-20"
 CONFIG = import_config(config_name)
 
 # Load assets
-model, vocabulary = load_assets(CONFIG)
+model = load_model(CONFIG)
 
 # Warmup model (triggers compilation)
 warm_up(
-    model=model,
-    vocabulary=vocabulary,
+    model=model
 )
 
 # Play
-wins, laws, draws, pgns = human_v_model(
+wins, losses, draws, pgns = human_v_model(
     human_color="b",  # color you want to play
     model=model,
-    vocabulary=vocabulary,
     k=1,  # "k" in "top_k sampling", k=1 is best
     use_amp=True,
     rounds=1,  # number of rounds you want to play
@@ -278,11 +322,10 @@ from chess_transformers.play.utils import load_engine
 engine = load_engine(CONFIG.FAIRY_STOCKFISH_PATH)
 
 # Play
-LL = 1  # Try Lichess levels 1 to 8 (note: 7 and 8 may be slow)
+LL = 1  # Try strength levels 1 to 8 (note: 7 and 8 may be slow)
 model_color = "w"  # Try "w" and "b"
 wins, losses, draws, pgns = model_v_engine(
     model=model,
-    vocabulary=vocabulary,
     k=CONFIG.SAMPLING_K,
     use_amp=CONFIG.USE_AMP,
     model_color=model_color,
@@ -303,7 +346,7 @@ wins, losses, draws, pgns = model_v_engine(
     else "Fairy Stockfish @ LL {} v. ".format(LL) + config_name,
 )
 ```
-See [**`lichess_eval.ipynb`**](chess_transformers/eval/lichess_eval.ipynb) for an example.
+See [**`evaluate.py`**](chess_transformers/evaluate/evaluate.py) for an example.
 
 ### Time Control
 
@@ -348,8 +391,6 @@ prepare_data(
     h5_file=CONFIG.H5_FILE,
     max_move_sequence_length=CONFIG.MAX_MOVE_SEQUENCE_LENGTH,
     expected_rows=CONFIG.EXPECTED_ROWS,
-    vocab_file=CONFIG.VOCAB_FILE,
-    splits_file=CONFIG.SPLITS_FILE,
     val_split_fraction=CONFIG.VAL_SPLIT_FRACTION,
 )
 ```
@@ -376,13 +417,25 @@ train_model(CONFIG)
 
 ### Evaluation
 
-Evaluate in [**`lichess_eval.ipynb`**](chess_transformers/eval/lichess_eval.ipynb), or use that code in your own Python notebook/script.
+Run [**`evaluate.py`**](chess_transformers/evaluate/evaluate.py) like `python evaluate.py [config_name]`, or do it in your own Python notebook/script.
+
+```python
+
+from chess_transformers.configs import import_config
+from chess_transformers.evaluate import evaluate_model
+
+# Load configuration
+CONFIG = import_config("[config_name]")
+
+# Evaluate model
+evaluate_model(CONFIG)
+```
 
 ## Contribute
 
 Contributions — and any discussion thereof — are welcome. As you may have noticed, *Chess Transformers* is in initial development and the public API is <ins>not</ins> to be considered stable. 
 
-If you are planning to contribute bug-fixes, please go ahead and do so. If you are planning to contribute in a way that extends *Chess Transformers*, or adds any new features, data, or models, please [open an issue](https://github.com/sgrvinod/chess-transformers/issues) to discuss it <ins>before</ins> you spend any time on it. Otherwise, your PR may be rejected due to lack of consensus or alignment with current goals.
+If you are planning to contribute bug-fixes, please go ahead and do so. If you are planning to contribute in a way that extends *Chess Transformers*, or adds any new features, data, or models, please [create a discussion thread](https://github.com/sgrvinod/chess-transformers/discussions/new/choose) to discuss it <ins>before</ins> you spend any time on it. Otherwise, your PR may be rejected due to lack of consensus or alignment with current goals.
 
 Presently, the following types of contributions may be useful:
 

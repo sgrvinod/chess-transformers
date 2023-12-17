@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
-)  # CPU isn't really practical here
+)
 
 
 class LabelSmoothedCE(torch.nn.Module):
