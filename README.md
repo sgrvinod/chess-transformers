@@ -63,7 +63,7 @@ There are currently three models available for use in *Chess Transformers*.
 All models are evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at increasing strength levels 1 to 6, [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
 <p align="center">
-  <img src="img/win_ratio.png"/>
+  <img src="img/win_ratio.png" style="width: 60vw;"/>
 </p>
 
 At each strength level of the chess engine, $n=1000$ games are played by the model, i.e. $500$ games each with black and white pieces. 
@@ -71,7 +71,7 @@ At each strength level of the chess engine, $n=1000$ games are played by the mod
 Win ratios and the difference between the Elo rating of the model and the chess engine are calculated from these games' outcomes.
 
 <p align="center">
-  <img src="img/elo_difference.png"/>
+  <img src="img/elo_difference.png" style="width: 60vw;"/>
 </p>
 
 Detailed evaluation results for each model are provided below.
