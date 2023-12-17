@@ -230,8 +230,8 @@ It consists of the following files:
   - **`white_queenside_castling_rights`**, whether white can castle queenside
   - **`black_kingside_castling_rights`**, whether black can castle kingside
   - **`black_queenside_castling_rights`**, whether black can castle queenside
-  - **`move_sequence`**, 10 half-moves into the future made by both players
-  - **`move_sequence_length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
+  - **`moves`**, 10 half-moves into the future made by both players
+  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
 
 ### *LE1222x*
 
@@ -255,8 +255,8 @@ It consists of the following files:
   - **`white_queenside_castling_rights`**, whether white can castle queenside
   - **`black_kingside_castling_rights`**, whether black can castle kingside
   - **`black_queenside_castling_rights`**, whether black can castle queenside
-  - **`move_sequence`**, 10 half-moves into the future made by both players
-  - **`move_sequence_length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
+  - **`moves`**, 10 half-moves into the future made by both players
+  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
 
 ## Play
 
