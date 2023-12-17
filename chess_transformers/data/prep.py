@@ -5,7 +5,8 @@ import tables as tb
 from tqdm import tqdm
 
 from chess_transformers.configs import import_config
-from chess_transformers.data.utils import create_vocabulary, encode, parse_fen
+from chess_transformers.data.utils import encode, parse_fen
+from chess_transformers.data.levels import TURN, PIECES, SQUARES, UCI_MOVES, BOOL
 
 
 def prepare_data(
@@ -13,8 +14,6 @@ def prepare_data(
     h5_file,
     max_move_sequence_length,
     expected_rows,
-    vocab_file,
-    splits_file=None,
     val_split_fraction=None,
 ):
     """
@@ -25,16 +24,15 @@ def prepare_data(
     form for human reference, and the other encoded to indices in a
     vocabulary for consumption by a neural network.
 
-    This also creates the vocabulary and train/val splits, and saves
-    these to JSON files. The splits are saved in the form of the index
-    to split the H5 data at, so that it is split into the training and
-    validation data. The games in each split should be mutually
-    exclusive.
+    This also creates train/val splits, and saves these as attributes of
+    the encoded table. The splits are saved in the form of the index to
+    split the H5 data at, so that it is split into the training and
+    validation data. The games in each split will be mutually exclusive.
 
-    Test sets are created separately from all of the raw data by
-    setting either "splits_file" or "val_split_fraction" to None. This
-    is because a single test set should be used for all models
-    regardless of the training or validation data.
+    Test sets are created separately from all of the raw data by setting
+    "val_split_fraction" to None. This is because a single test set
+    should be used for all models regardless of the training or
+    validation data.
 
     Args:
 
@@ -48,11 +46,6 @@ def prepare_data(
         expected_rows (int): The expected number of rows in the H5
         tables, for internally optimizing write/read access.
 
-        vocab_file (str): The vocabulary file to be saved.
-
-        splits_file (str): The splits file to be saved. If None, no
-        splits will be computed. Defaults to None.
-
         val_split_fraction (float): The fraction, approximately, at
         which the validation data should begin. If None, no splits will
         be computed. Defaults to None.
@@ -64,15 +57,6 @@ def prepare_data(
     assert len(moves_files) == len(fens_files)
     print("\nMoves and FENs are stored in %d chunk(s).\n" % len(moves_files))
 
-    # Create vocabulary and save to file
-    vocabulary = create_vocabulary(data_folder, moves_files)
-    with open(os.path.join(data_folder, vocab_file), "w") as j:
-        json.dump(vocabulary, j, indent=4)
-    print(
-        "There are %d moves in the move vocabulary, not including '<move>', '<loss>', or '<pad>' tokens. Mathematically, there are only 1968 possible UCI moves.\n"
-        % (len(vocabulary["move_sequence"]) - 3)
-    )
-
     # Create table description for H5 file
     class ChessTable(tb.IsDescription):
         board_position = tb.StringCol(64)
@@ -81,10 +65,12 @@ def prepare_data(
         white_queenside_castling_rights = tb.BoolCol()
         black_kingside_castling_rights = tb.BoolCol()
         black_queenside_castling_rights = tb.BoolCol()
-        move_sequence = tb.StringCol(
+        moves = tb.StringCol(
             shape=(max_move_sequence_length + 1), itemsize=8, dflt="<pad>"
         )  # "dflt" doesn't work for some reason
-        move_sequence_length = tb.Int8Col()
+        length = tb.Int8Col()
+        from_square = tb.StringCol(2)
+        to_square = tb.StringCol(2)
 
     # Create table description for HDF5 file
     class EncodedChessTable(tb.IsDescription):
@@ -94,8 +80,10 @@ def prepare_data(
         white_queenside_castling_rights = tb.Int8Col()
         black_kingside_castling_rights = tb.Int8Col()
         black_queenside_castling_rights = tb.Int8Col()
-        move_sequence = tb.Int16Col(shape=(max_move_sequence_length + 1))
-        move_sequence_length = tb.Int8Col()
+        moves = tb.Int16Col(shape=(max_move_sequence_length + 1))
+        length = tb.Int8Col()
+        from_square = tb.Int8Col()
+        to_square = tb.Int8Col()
 
     # Delete H5 file if it already exists; start anew
     if os.path.exists(os.path.join(data_folder, h5_file)):
@@ -138,6 +126,7 @@ def prepare_data(
         for j in tqdm(range(len(all_moves)), desc="Adding rows to table"):
             moves = all_moves[j].split("\n")
             result = moves.pop(-1)
+            moves = [move.lower() for move in moves]
             moves.append("<loss>")  # like an EOS token
             fens = all_fens[j].split("\n")
             assert len(moves) == len(fens)
@@ -155,11 +144,11 @@ def prepare_data(
 
                 # Board position
                 row["board_position"] = b
-                encoded_row["board_position"] = encode(b, vocabulary["board_position"])
+                encoded_row["board_position"] = encode(b, PIECES)
 
                 # Turn
                 row["turn"] = t
-                encoded_row["turn"] = encode(t, vocabulary["turn"])
+                encoded_row["turn"] = encode(t, TURN)
 
                 # Castling rights
                 row["white_kingside_castling_rights"] = wk
@@ -168,31 +157,37 @@ def prepare_data(
                 row["black_queenside_castling_rights"] = bq
                 encoded_row["white_kingside_castling_rights"] = encode(
                     wk,
-                    vocabulary["white_kingside_castling_rights"],
+                    BOOL,
                 )
                 encoded_row["white_queenside_castling_rights"] = encode(
                     wq,
-                    vocabulary["white_queenside_castling_rights"],
+                    BOOL,
                 )
                 encoded_row["black_kingside_castling_rights"] = encode(
                     bk,
-                    vocabulary["black_kingside_castling_rights"],
+                    BOOL,
                 )
                 encoded_row["black_queenside_castling_rights"] = encode(
                     bq,
-                    vocabulary["black_queenside_castling_rights"],
+                    BOOL,
                 )
 
                 # Move sequence
-                row["move_sequence"] = ms
-                encoded_row["move_sequence"] = encode(
+                row["moves"] = ms
+                encoded_row["moves"] = encode(
                     ms,
-                    vocabulary["move_sequence"],
+                    UCI_MOVES,
                 )
 
                 # Move sequence lengths
-                row["move_sequence_length"] = msl
-                encoded_row["move_sequence_length"] = msl
+                row["length"] = msl
+                encoded_row["length"] = msl
+
+                # "From" and "To" squares corresponding to next move
+                row["from_square"] = ms[1][:2]
+                encoded_row["from_square"] = encode(ms[1][:2], SQUARES)
+                row["to_square"] = ms[1][2:4]
+                encoded_row["to_square"] = encode(ms[1][2:4], SQUARES)
 
                 # Add row
                 row.append()
@@ -206,7 +201,7 @@ def prepare_data(
     print("...done.\n")
 
     # Get indices to split at
-    if splits_file is not None and val_split_fraction is not None:
+    if val_split_fraction is not None:
         val_split_index = None
         for i in new_game_indices:
             if val_split_index is None:
@@ -218,12 +213,7 @@ def prepare_data(
             "The training set will start at index 0, the validation set at index %d (%2.6f%%).\n"
             % (val_split_index, 100.0 * val_split_index / table.nrows)
         )
-        with open(os.path.join(data_folder, splits_file), "w") as j:
-            json.dump(
-                {"val_split_index": val_split_index},
-                j,
-                indent=4,
-            )
+        encoded_table.attrs.val_split_index = val_split_index
 
     # Close H5 file
     h5_file.close()
@@ -242,7 +232,5 @@ if __name__ == "__main__":
         h5_file=CONFIG.H5_FILE,
         max_move_sequence_length=CONFIG.MAX_MOVE_SEQUENCE_LENGTH,
         expected_rows=CONFIG.EXPECTED_ROWS,
-        vocab_file=CONFIG.VOCAB_FILE,
-        splits_file=CONFIG.SPLITS_FILE,
         val_split_fraction=CONFIG.VAL_SPLIT_FRACTION,
     )

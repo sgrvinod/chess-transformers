@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
-)  # CPU isn't really practical here
+)
 
 
 class LabelSmoothedCE(torch.nn.Module):
@@ -14,34 +14,36 @@ class LabelSmoothedCE(torch.nn.Module):
     https://arxiv.org/abs/1512.00567
     """
 
-    def __init__(self, eps, n_moves):
+    def __init__(self, eps, n_predictions):
         """
         Init.
 
         Args:
 
-            eps (float, optional): Smoothing co-efficient. Defaults to
-            0.1.
+            eps (float): Smoothing co-efficient. 
+
+            n_predictions (int): Number of predictions expected per
+            datapoint, or length of the predicted sequence.
         """
         super(LabelSmoothedCE, self).__init__()
         self.eps = eps
-        self.indices = torch.arange(n_moves).unsqueeze(0).to(DEVICE)  # (1, n_moves)
+        self.indices = torch.arange(n_predictions).unsqueeze(0).to(DEVICE)  # (1, n_predictions)
         self.indices.requires_grad = False
 
-    def forward(self, predicted_moves, target_moves, lengths):
+    def forward(self, predicted, targets, lengths):
         """
         Forward prop.
 
         Args:
 
-            predicted_moves (torch.FloatTensor): The predicted next-move
-            probabilities, of size (N, n_moves, move_vocab_size).
+            predicted (torch.FloatTensor): The predicted probabilities,
+            of size (N, n_predictions, vocab_size).
 
-            target_moves (torch.LongTensor): The actual next-moves made
-            in this game, of size (N, n_moves).
+            targets (torch.LongTensor): The actual targets, of size (N,
+            n_predictions).
 
-            lengths (torch.LongTensor): The true lengths of the move
-            sequences, not including <move> and <pad> tokens, of size
+            lengths (torch.LongTensor): The true lengths of the
+            prediction sequences, not including special tokens, of size
             (N, 1).
 
         Returns:
@@ -50,25 +52,25 @@ class LabelSmoothedCE(torch.nn.Module):
             scalar.
         """
         # Remove pad-positions and flatten
-        predicted_moves = predicted_moves[
+        predicted = predicted[
             self.indices < lengths
         ]  # (sum(lengths), vocab_size)
-        target_moves = target_moves[self.indices < lengths]  # (sum(lengths))
+        targets = targets[self.indices < lengths]  # (sum(lengths))
 
         # "Smoothed" one-hot vectors for the gold sequences
         target_vector = (
-            torch.zeros_like(predicted_moves)
-            .scatter(dim=1, index=target_moves.unsqueeze(1), value=1.0)
+            torch.zeros_like(predicted)
+            .scatter(dim=1, index=targets.unsqueeze(1), value=1.0)
             .to(DEVICE)
-        )  # (sum(lengths), move_vocab_size), one-hot
+        )  # (sum(lengths), vocab_size), one-hot
         target_vector = target_vector * (
             1.0 - self.eps
         ) + self.eps / target_vector.size(
             1
-        )  # (sum(lengths), move_vocab_size), "smoothed" one-hot
+        )  # (sum(lengths), vocab_size), "smoothed" one-hot
 
         # Compute smoothed cross-entropy loss
-        loss = (-1 * target_vector * F.log_softmax(predicted_moves, dim=1)).sum(
+        loss = (-1 * target_vector * F.log_softmax(predicted, dim=1)).sum(
             dim=1
         )  # (sum(lengths))
 
