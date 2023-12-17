@@ -9,8 +9,6 @@
 
 *Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
 
-This is in initial development and the public API may change at any time.
-
 ## Contents
 
 [**Install**](#install)
