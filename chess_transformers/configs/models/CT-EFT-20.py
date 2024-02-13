@@ -99,10 +99,6 @@ CHECKPOINT_AVG_SUFFIX = (
 FINAL_CHECKPOINT = (
     "averaged_" + NAME + ".pt"
 )  # final checkpoint to be used for eval/inference
-FINAL_CHECKPOINT_GDID = (
-    "1OHtg336ujlOjp5Kp0KjE1fAPF74aZpZD"  # Google Drive ID for download
-)
-
 
 ################################
 ########## Evaluation ##########
