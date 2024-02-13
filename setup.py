@@ -30,7 +30,6 @@ setup(
         "torch==2.1.0",
         "tqdm==4.64.1",
         "scipy>=1.10.0",
-        "gdown==4.7.1"
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
