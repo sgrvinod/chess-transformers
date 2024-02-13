@@ -4,7 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.2.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.2.1"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
 *Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
@@ -76,8 +76,8 @@ Detailed evaluation results for each model are provided below.
 
 ### *CT-E-20*
 
-[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://drive.google.com/file/d/18Er4LbdujG-qiPPoqORvMQVcsiFerqY4/view?usp=drive_link) | 
-[**TensorBoard Logs**](https://drive.google.com/drive/folders/1WwWJS4804uKrONPcCtyQSGlOSUlo05-0?usp=drive_link) 
+[**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-E-20/averaged_CT-E-20.pt) | 
+[**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-E-20.zip) 
 
 This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation).
 
@@ -118,8 +118,8 @@ These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-2
 
 ### *CT-EFT-20*
 
-[**Configuration File**](chess_transformers/configs/models/CT-EFT-20.py) | [**Checkpoint**](https://drive.google.com/file/d/1OHtg336ujlOjp5Kp0KjE1fAPF74aZpZD/view?usp=drive_link) | 
-[**TensorBoard Logs**](https://drive.google.com/drive/folders/1gD-msDgMlRqjB7Y0DIGWZxKgsxjqIwQp?usp=drive_link) 
+[**Configuration File**](chess_transformers/configs/models/CT-EFT-20.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-EFT-20/averaged_CT-EFT-20.pt) | 
+[**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-EFT-20.zip) 
 
 This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. Two classification heads operate upon the encoder outputs at all chessboard squares to predict the best candidates for the source (*From*) and destination (*To*) squares that correspond to the best half-move to be made.
 
@@ -160,8 +160,8 @@ These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT
 
 ### *CT-ED-45*
 
-[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://drive.google.com/file/d/1zasRpPmZQVtAqumet9XMy1FBpmxxiM4L/view?usp=drive_link) | 
-[**TensorBoard Logs**](https://drive.google.com/drive/folders/1LGsKMsjFRjQBS56UJZTjegFMl7amIbSw?usp=drive_link) 
+[**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-ED-45/averaged_CT-ED-45.pt) | 
+[**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-ED-45.zip) 
 
 This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made next, followed by the likely course of the game an arbitrary number of half-moves into the future. 
 
@@ -219,7 +219,7 @@ On this data, we apply the following filters to keep only those games that:
 
 These 274,794 games consist of a total **13,287,522 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
 
-[**Download here.**](https://drive.google.com/drive/folders/17VrTNUbGXqCnK0d5oU3YJBsl6jybfVRM?usp=drive_link) The data is zipped and will need to be extracted.
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE1222.zip) The data is zipped and will need to be extracted.
 
 It consists of the following files:
 
@@ -244,7 +244,7 @@ On this data, we apply the following filters to keep only those games that:
 
 These 2,751,394 games consist of a total **127,684,720 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
 
-[**Download here.**](https://drive.google.com/drive/folders/17VrTNUbGXqCnK0d5oU3YJBsl6jybfVRM?usp=drive_link) The data is zipped and will need to be extracted.
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE1222x.zip) The data is zipped and will need to be extracted.
 
 It consists of the following files:
 

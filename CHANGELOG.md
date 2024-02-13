@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.2.1
+
+### Changed
+
+* All model checkpoints, datasets, and logs have now been moved to Microsoft Azure Storage for more reliable access.
+
 ## v0.2.0
 
 ### Added

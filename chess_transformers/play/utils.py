@@ -1,7 +1,7 @@
 import os
 import sys
 import chess
-import gdown
+import urllib
 import pathlib
 import markdown
 import textwrap
@@ -9,6 +9,7 @@ import chess.pgn
 import chess.engine
 import torch.utils.data
 import torch.nn.functional as F
+from tqdm import tqdm
 from datetime import date
 from tabulate import tabulate
 from bs4 import BeautifulSoup
@@ -39,6 +40,36 @@ UNICODE_CHESS_PIECES = {
 }
 
 
+def download_file(url, output_path):
+    """
+    Download the file at the given URL into a specified output path.
+
+    Adapted from https://github.com/tqdm/tqdm#hooks-and-callbacks
+
+    Args:
+
+        url (str): The URL for the file to download.
+
+        output_path (str): The path of the file to download into.
+    """
+
+    class TQDMUpTo(tqdm):
+        def update_to(self, b=1, bsize=1, tsize=None):
+            if tsize is not None:
+                self.total = tsize
+            return self.update(b * bsize - self.n)
+
+    with TQDMUpTo(
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        miniters=1,
+        desc=url.split("/")[-1],
+    ) as t:
+        urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
+        t.total = t.n
+
+
 def load_model(CONFIG):
     """
     Load model for inference.
@@ -62,10 +93,25 @@ def load_model(CONFIG):
     checkpoint_folder.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_folder / CONFIG.FINAL_CHECKPOINT
     if not checkpoint_path.exists():
-        print("\nCannot find model checkpoint on disk; will download.")
-        gdown.download(
-            id=CONFIG.FINAL_CHECKPOINT_GDID, output=str(checkpoint_path), quiet=False
-        )
+        print("\nCannot find model checkpoint on disk; will download.\n")
+        download_file(
+            "ht"
+            + "tp"
+            + "s:"
+            + "//"
+            + "chess"
+            + "transformers"
+            + "."
+            + "blob"
+            + "."
+            + "core"
+            + "."
+            + "windows"
+            + "."
+            + "net"
+            + "/checkpoints/{}/{}".format(CONFIG.NAME, CONFIG.FINAL_CHECKPOINT),
+            str(checkpoint_path),
+        )  # scramble address against simple bots
 
     # Load checkpoint
     checkpoint = torch.load(str(checkpoint_path))
@@ -79,6 +125,8 @@ def load_model(CONFIG):
         disable=CONFIG.DISABLE_COMPILATION,
     )
     model.eval()  # eval mode disables dropout
+
+    print("\nModel loaded!\n")
 
     return model
 
@@ -100,9 +148,11 @@ def show_engine_options(engine):
                 option.default,
                 option.min,
                 option.max,
-                "\n".join(textwrap.wrap(", ".join(option.var)))
-                if len(option.var) > 0
-                else None,
+                (
+                    "\n".join(textwrap.wrap(", ".join(option.var)))
+                    if len(option.var) > 0
+                    else None
+                ),
             ]
         )
     display(
@@ -123,7 +173,8 @@ def load_engine(path, show_options=True):
 
         path (str): The path to the engine file (an executable).
 
-        show_options (bool, optional): Print configurable UCI options for engine.
+        show_options (bool, optional): Print configurable UCI options
+        for engine.
 
     Returns:
 
