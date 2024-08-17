@@ -103,7 +103,7 @@ def elo_delta_margin(wins, losses, draws, confidence=0.95):
     min_confidence = (1 - confidence) / 2
     max_confidence = 1 - min_confidence
     min_dev = wr + std_dev * norm.ppf(min_confidence)
-    max_dev = wr + std_dev * norm.ppf(max_confidence)
+    max_dev = min(wr + std_dev * norm.ppf(max_confidence), 0.999)
 
     margin = (elo_delta_from_win_ratio(max_dev) - elo_delta_from_win_ratio(min_dev)) / 2
 

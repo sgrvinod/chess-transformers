@@ -2,7 +2,7 @@ import torch
 import pathlib
 
 from chess_transformers.train.utils import get_lr
-from chess_transformers.configs.data.LE1222 import *
+from chess_transformers.configs.data.LE22ct import *
 from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDataset
 from chess_transformers.configs.other.fairy_stockfish import *
@@ -64,10 +64,16 @@ BATCHES_PER_STEP = (
 PRINT_FREQUENCY = 1  # print status once every so many steps
 N_STEPS = 100000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official transformer repo.
-STEP = 1  # the step number, start from 1 to prevent math error in the next line
+STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
+LR_SCHEDULE = "vaswani"  # the learning rate schedule; see utils.py for learning rate schedule
+LR_DECAY = None  # the decay rate for 'exp_decay' schedule
 LR = get_lr(
-    step=STEP, d_model=D_MODEL, warmup_steps=WARMUP_STEPS
-)  # see utils.py for learning rate schedule; twice the schedule in the paper, as in the official transformer repo.
+    step=STEP,
+    d_model=D_MODEL,
+    warmup_steps=WARMUP_STEPS,
+    schedule=LR_SCHEDULE,
+    decay=LR_DECAY,
+)  # see utils.py for learning rate schedule
 START_EPOCH = 0  # start at this epoch
 BETAS = (0.9, 0.98)  # beta coefficients in the Adam optimizer
 EPSILON = 1e-9  # epsilon term in the Adam optimizer
@@ -105,5 +111,5 @@ FINAL_CHECKPOINT = (
 ################################
 
 EVAL_GAMES_FOLDER = str(
-    pathlib.Path(__file__).parent.parent.parent.resolve() / "eval" / "games" / NAME
+    pathlib.Path(__file__).parent.parent.parent.resolve() / "evaluate" / "games" / NAME
 )  # folder where evaluation games are saved in PGN files

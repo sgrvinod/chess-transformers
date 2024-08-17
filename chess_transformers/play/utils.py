@@ -114,7 +114,7 @@ def load_model(CONFIG):
         )  # scramble address against simple bots
 
     # Load checkpoint
-    checkpoint = torch.load(str(checkpoint_path))
+    checkpoint = torch.load(str(checkpoint_path), weights_only=True)
     _model.load_state_dict(checkpoint["model_state_dict"])
 
     # Compile model
