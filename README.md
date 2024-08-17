@@ -308,7 +308,7 @@ These 274,794 games consist of a total **13,287,522 half-moves** made by the <in
 
 It consists of the following files:
 
-- **`LE22c5.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+- **`LE22ct.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
   - **`board_position`**, the chessboard layout, or positions of pieces on the board
   - **`turn`**, the color of the pieces of the player to play
   - **`white_kingside_castling_rights`**, whether white can castle kingside
