@@ -18,7 +18,7 @@
 * Dependencies in [**`setup.py`**](https://github.com/sgrvinod/chess-transformers/blob/main/setup.py) have been updated to newer versions.
 * Fixed an error in **`chess_transformers.play.model_v_model()`** where a move would be attempted by the model playing black even after white won the game with a checkmate.
 * Fixed the `EVAL_GAMES_FOLDER` parameter in the model configuration files pointing to the incorrect folder name **`chess_transformers/eval`** instead of **`chess_transformers/evaluate`**.
-* Fixed an error in **`chess_transformers.evaluate.metrics.elo_delta_margin()`** where the upper limit of the winrate for the confidence interval was not capped at a value of 1.
+* Fixed an error in **`chess_transformers.evaluate.metrics.elo_delta_margin()`** where the upper limit of the win ratio for the confidence interval was not capped at a value of 100%.
 * All calls to `torch.load()` now use `weights_only=True` in compliance with its updated API.
 
 ## v0.2.1

@@ -104,7 +104,7 @@ You <ins>do not</ins> need to download the model checkpoint manually. It will be
 
 *CT-E-20* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
-These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-20/).
+These evaluation games can be viewed [here](chess_transformers/evaluate/games/CT-E-20/).
 
 | Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference      | Likelihood of Superiority |
 | :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :----------------------: | :-----------------------: |
@@ -146,7 +146,7 @@ You <ins>do not</ins> need to download the model checkpoint manually. It will be
 
 *CT-EFT-20* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
-These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT-20/).
+These evaluation games can be viewed [here](chess_transformers/evaluate/games/CT-EFT-20/).
 
 | Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference       | Likelihood of Superiority |
 | :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :-----------------------: | :-----------------------: |
@@ -229,7 +229,7 @@ You <ins>do not</ins> need to download the model checkpoint manually. It will be
 
 *CT-EFT-85* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
-These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT-85/).
+These evaluation games can be viewed [here](chess_transformers/evaluate/games/CT-EFT-85/).
 
 | Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference       | Likelihood of Superiority |
 | :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :-----------------------: | :-----------------------: |
