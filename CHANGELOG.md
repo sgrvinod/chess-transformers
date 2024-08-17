@@ -1,5 +1,26 @@
 # Change Log
 
+## v0.3.0
+
+### Added
+
+* There are 3 new datasets: [ML23c](https://github.com/sgrvinod/chess-transformers#ml23c), [GC22c](https://github.com/sgrvinod/chess-transformers#gc22c), and [ML23d](https://github.com/sgrvinod/chess-transformers#ml23d).
+* A new naming convention for datasets is used. Datasets are now named in the format "[*PGN Fileset*][*Filters*]". For example, *LE1222* is now called [*LE22ct*](https://github.com/sgrvinod/chess-transformers#le22ct), where *LE22* is the name of the PGN fileset from which this dataset was derived, and "*c*", "*t*" are filters for games that ended in checkmates and games that used a specific time control respectively.
+* [*CT-EFT-85*](https://github.com/sgrvinod/chess-transformers#ct-eft-85) is a new trained model with about 85 million parameters.
+* **`chess_transformers.train.utils.get_lr()`** now accepts new arguments, `schedule` and `decay`, to accomodate a new learning rate schedule: exponential decay after warmup.
+* **`chess_transformers.data.prepare_data()`** now handles errors where there is a mismatch between the number of moves and the number of FENs, or when the recorded result in the PGN file was incorrect. Such games are now reported and excluded during dataset creation.
+
+### Changed
+
+* The *LE1222* and *LE1222x* datasets are now renamed to [*LE22ct*](https://github.com/sgrvinod/chess-transformers#le22ct) and [*LE22c*](https://github.com/sgrvinod/chess-transformers#le22c) respectively.
+* All calls to **`chess_transformers.train.utils.get_lr()`** now use the `schedule` and `decay` arguments, even in cases where a user-defined decay is not required.
+* **`chess_transformers.train.datasets.ChessDatasetFT`** was optimized for large datasets. A list of indices for the data split is no longer maintained or indexed in the dataset.
+* Dependencies in [**`setup.py`**](https://github.com/sgrvinod/chess-transformers/blob/main/setup.py) have been updated to newer versions.
+* Fixed an error in **`chess_transformers.play.model_v_model()`** where a move would be attempted by the model playing black even after white won the game with a checkmate.
+* Fixed the `EVAL_GAMES_FOLDER` parameter in the model configuration files pointing to the incorrect folder name **`chess_transformers/eval`** instead of **`chess_transformers/evaluate`**.
+* Fixed an error in **`chess_transformers.evaluate.metrics.elo_delta_margin()`** where the upper limit of the winrate for the confidence interval was not capped at a value of 1.
+* All calls to `torch.load()` now use `weights_only=True` in compliance with its updated API.
+
 ## v0.2.1
 
 ### Changed
@@ -13,7 +34,7 @@
 * **`ChessTransformerEncoderFT`** is an encoder-only transformer that predicts source (*From*) and destination squares (*To*) squares for the next half-move, instead of the half-move in UCI notation.
 * [*CT-EFT-20*](https://github.com/sgrvinod/chess-transformers#ct-eft-20) is a new trained model of this type with about 20 million parameters.
 * **`ChessDatasetFT`** is a PyTorch dataset class for this model type.
-* [**`chess_transformer.data.levels`**](https://github.com/sgrvinod/chess-transformers/blob/main/chess_transformers/data/levels.py) provides a standardized vocabulary (with indices) for oft-used categorical variables. All models and datasets will hereon use this standard vocabulary instead of a dataset-specific vocabulary.
+* [**`chess_transformers.data.levels`**](https://github.com/sgrvinod/chess-transformers/blob/main/chess_transformers/data/levels.py) provides a standardized vocabulary (with indices) for oft-used categorical variables. All models and datasets will hereon use this standard vocabulary instead of a dataset-specific vocabulary.
 
 ### Changed
 

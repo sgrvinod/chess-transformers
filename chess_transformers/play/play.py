@@ -285,12 +285,13 @@ def model_v_model(
                 use_amp=use_amp_w,
                 k=k_w,
             )
-            board = model_move(
-                model=model_b,
-                board=board,
-                use_amp=use_amp_b,
-                k=k_b,
-            )
+            if not board.is_game_over():
+                board = model_move(
+                    model=model_b,
+                    board=board,
+                    use_amp=use_amp_b,
+                    k=k_b,
+                )
         w_wins += int(board.result() == "1-0")
         b_wins += int(board.result() == "0-1")
         draws += int(board.result() == "1/2-1/2")

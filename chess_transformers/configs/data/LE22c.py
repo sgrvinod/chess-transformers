@@ -4,7 +4,7 @@ import os
 ############ Name #############
 ###############################
 
-NAME = "LE1222x"  # name and identifier for this configuration
+NAME = "LE22c"  # name and identifier for this configuration
 
 ###############################
 ############ Data #############

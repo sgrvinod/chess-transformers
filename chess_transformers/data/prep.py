@@ -110,6 +110,10 @@ def prepare_data(
     new_game_index = 0
     new_game_indices = list()
 
+    # Keep track of errors
+    n_wrong_results = 0
+    n_move_fen_mismatches = 0
+
     # Iterate through chunks
     for i in range(len(moves_files)):
         print("Now reading %s and %s...\n" % (moves_files[i], fens_files[i]))
@@ -129,8 +133,18 @@ def prepare_data(
             moves = [move.lower() for move in moves]
             moves.append("<loss>")  # like an EOS token
             fens = all_fens[j].split("\n")
-            assert len(moves) == len(fens)
+
+            # Ignore game if there is a mismatch between moves and FENs
+            if len(moves) != len(fens):
+                n_move_fen_mismatches += 1
+                continue  # ignore this game
+
             start_index = 0 if result == "1-0" else 1
+
+            # Ignore this game if the wrong result is recorded in the source file
+            if len(moves) % 2 != start_index:
+                n_wrong_results += 1
+                continue
 
             # Iterate through moves in this game
             for k in range(start_index, len(moves), 2):
@@ -199,6 +213,22 @@ def prepare_data(
         print("\nA total of %d datapoints have been saved to disk.\n" % table.nrows)
 
     print("...done.\n")
+
+    if n_move_fen_mismatches > 0:
+        print(
+            "NOTE: %d game(s) excluded because number of moves and FENs did not match.\n"
+            % n_move_fen_mismatches
+        )
+    if n_wrong_results > 0:
+        print(
+            "NOTE: %d game(s) (%.2f percent) excluded that had the wrong result recorded.\n"
+            % (
+                n_wrong_results,
+                n_wrong_results
+                * 100.0
+                / (len(new_game_indices) + n_wrong_results + n_move_fen_mismatches),
+            )
+        )
 
     # Get indices to split at
     if val_split_fraction is not None:

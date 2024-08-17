@@ -15,14 +15,14 @@ class ChessDataset(Dataset):
 
         Args:
 
-            data_folder (str): The folder containing the H5 and splits
-            files.
+            datasets (list): A list of tuples, each containing:
 
-            h5_file (str): The H5 file.
+                (dict): A data configuration representing the
+                dataset.
 
-            split (str): The data split. One of "train", "val", None.
-            Defaults to None, which means that all datapoints will be
-            included.
+                (str): The data split. One of "train", "val", or
+                None, which means that all datapoints will be
+                included.
 
             n_moves (int, optional): Number of moves into the future to
             return. Defaults to None, which means that all moves in the
@@ -36,6 +36,7 @@ class ChessDataset(Dataset):
         self.encoded_table = self.h5_file.root.encoded_data
 
         # Create indices
+        # TODO: optimize by using a start_index and not a list of indices
         if split == "train":
             self.indices = list(range(0, self.encoded_table.attrs.val_split_index))
         elif split == "val":
@@ -120,43 +121,40 @@ class ChessDatasetFT(Dataset):
         # Open table in H5 file
         self.h5_file = tb.open_file(os.path.join(data_folder, h5_file), mode="r")
         self.encoded_table = self.h5_file.root.encoded_data
+        self.split = split
 
         # Create indices
         if split == "train":
-            self.indices = list(range(0, self.encoded_table.attrs.val_split_index))
+            self.first_index = 0
         elif split == "val":
-            self.indices = list(
-                range(
-                    self.encoded_table.attrs.val_split_index, self.encoded_table.nrows
-                )
-            )
+            self.first_index = self.encoded_table.attrs.val_split_index
         elif split is None:
-            self.indices = list(range(0, self.encoded_table.nrows))
+            self.first_index = 0
         else:
             raise NotImplementedError
 
     def __getitem__(self, i):
-        turns = torch.IntTensor([self.encoded_table[self.indices[i]]["turn"]])
+        turns = torch.IntTensor([self.encoded_table[self.first_index + i]["turn"]])
         white_kingside_castling_rights = torch.IntTensor(
-            [self.encoded_table[self.indices[i]]["white_kingside_castling_rights"]]
+            [self.encoded_table[self.first_index + i]["white_kingside_castling_rights"]]
         )  # (1)
         white_queenside_castling_rights = torch.IntTensor(
-            [self.encoded_table[self.indices[i]]["white_queenside_castling_rights"]]
+            [self.encoded_table[self.first_index + i]["white_queenside_castling_rights"]]
         )  # (1)
         black_kingside_castling_rights = torch.IntTensor(
-            [self.encoded_table[self.indices[i]]["black_kingside_castling_rights"]]
+            [self.encoded_table[self.first_index + i]["black_kingside_castling_rights"]]
         )  # (1)
         black_queenside_castling_rights = torch.IntTensor(
-            [self.encoded_table[self.indices[i]]["black_queenside_castling_rights"]]
+            [self.encoded_table[self.first_index + i]["black_queenside_castling_rights"]]
         )  # (1)
         board_position = torch.IntTensor(
-            self.encoded_table[self.indices[i]]["board_position"]
+            self.encoded_table[self.first_index + i]["board_position"]
         )  # (64)
         from_square = torch.LongTensor(
-            [self.encoded_table[self.indices[i]]["from_square"]]
+            [self.encoded_table[self.first_index + i]["from_square"]]
         )  # (1)
         to_square = torch.LongTensor(
-            [self.encoded_table[self.indices[i]]["to_square"]]
+            [self.encoded_table[self.first_index + i]["to_square"]]
         )  # (1)
         length = torch.LongTensor([1])
         return {
@@ -172,7 +170,15 @@ class ChessDatasetFT(Dataset):
         }
 
     def __len__(self):
-        return len(self.indices)
+        if self.split == "train":
+            return self.encoded_table.attrs.val_split_index
+        elif self.split == "val":
+            return self.encoded_table.nrows - self.encoded_table.attrs.val_split_index
+        elif self.split is None:
+            self.encoded_table.nrows
+        else:
+            raise NotImplementedError
+
 
 
 if __name__ == "__main__":

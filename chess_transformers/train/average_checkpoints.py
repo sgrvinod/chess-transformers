@@ -39,7 +39,7 @@ def average_checkpoints(
     # Average parameters from checkpoints
     averaged_params = OrderedDict()
     for c in checkpoint_names:
-        checkpoint = torch.load(os.path.join(checkpoint_folder, c))
+        checkpoint = torch.load(os.path.join(checkpoint_folder, c), weights_only=True)
         checkpoint_params = checkpoint["model_state_dict"]
         checkpoint_param_names = checkpoint_params.keys()
         for param_name in checkpoint_param_names:

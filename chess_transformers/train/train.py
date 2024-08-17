@@ -71,7 +71,8 @@ def train_model(CONFIG):
     # Load checkpoint if available
     if CONFIG.TRAINING_CHECKPOINT is not None:
         checkpoint = torch.load(
-            os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT)
+            os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT),
+            weights_only=True,
         )
         start_epoch = checkpoint["epoch"] + 1
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -285,7 +286,11 @@ def train_epoch(
             change_lr(
                 optimizer,
                 new_lr=get_lr(
-                    step=step, d_model=CONFIG.D_MODEL, warmup_steps=CONFIG.WARMUP_STEPS
+                    step=step,
+                    d_model=CONFIG.D_MODEL,
+                    warmup_steps=CONFIG.WARMUP_STEPS,
+                    schedule=CONFIG.LR_SCHEDULE,
+                    decay=CONFIG.LR_DECAY,
                 ),
             )
 

@@ -4,7 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.2.1"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.3.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
 *Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
@@ -50,13 +50,14 @@ pip install -e .
 
 ## Models
 
-There are currently three models available for use in *Chess Transformers*.
+There are currently four models available for use in *Chess Transformers*.
 
 |          Model Name           | # Params |      Training Data      |            Architecture             |                                                                 Predictions                                                                  |
 | :---------------------------: | :------: | :---------------------: | :---------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------: |
-|   [***CT-E-20***](#ct-e-20)   |   20M    | [***LE1222***](#le1222) |      Transformer encoder only       |                                                 Best next half-move (or ply) <br> eg. *f2e3*                                                 |
-| [***CT-EFT-20***](#ct-eft-20) |   20M    | [***LE1222***](#le1222) |      Transformer encoder only       |                            Best *From* and *To* squares corresponding to the next half-move eg. from *f2* to *e3*                            |
-|  [***CT-ED-45***](#ct-ed-45)  |   45M    | [***LE1222***](#le1222) | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *f2e3* -> *b4b3* -> *e3h6* -> *b3b2* -> *g4e6* -> *g8f8* -> *g3g7* -> *f8e8* -> *g7f7* -> *loses* |
+|   [***CT-E-20***](#ct-e-20)   |   20M    | [***LE22ct***](#le22ct) |      Transformer encoder only       |                                                 Best next half-move (or ply) <br> eg. *f2e3*                                                 |
+| [***CT-EFT-20***](#ct-eft-20) |   20M    | [***LE22ct***](#le22ct) |      Transformer encoder only       |                            Best *From* and *To* squares corresponding to the next half-move eg. from *f2* to *e3*                            |
+|  [***CT-ED-45***](#ct-ed-45)  |   45M    | [***LE22ct***](#le22ct) | Transformer encoder <br>and decoder | Sequence of half-moves (or plies) <br> eg. *f2e3* -> *b4b3* -> *e3h6* -> *b3b2* -> *g4e6* -> *g8f8* -> *g3g7* -> *f8e8* -> *g7f7* -> *loses* |
+| [***CT-EFT-85***](#ct-eft-85) |   85M    |  [***LE22c***](#le22c)  |      Transformer encoder only       |                            Best *From* and *To* squares corresponding to the next half-move eg. from *f2* to *e3*                            |
 
 All models are evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at increasing strength levels 1 to 6, [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
 
@@ -79,7 +80,7 @@ Detailed evaluation results for each model are provided below.
 [**Configuration File**](chess_transformers/configs/models/CT-E-20.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-E-20/averaged_CT-E-20.pt) | 
 [**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-E-20.zip) 
 
-This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation).
+This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE22ct*](#le22ct) dataset. A classification head at the **`turn`** token predicts the best half-move to be made (in UCI notation).
 
 <p align="center">
   <img src="img/ct_e_20.png"/>
@@ -121,7 +122,7 @@ These evaluation games can be viewed [here](chess_transformers/eval/games/CT-E-2
 [**Configuration File**](chess_transformers/configs/models/CT-EFT-20.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-EFT-20/averaged_CT-EFT-20.pt) | 
 [**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-EFT-20.zip) 
 
-This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. Two classification heads operate upon the encoder outputs at all chessboard squares to predict the best candidates for the source (*From*) and destination (*To*) squares that correspond to the best half-move to be made.
+This is the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE22ct*](#le22ct) dataset. Two classification heads operate upon the encoder outputs at all chessboard squares to predict the best candidates for the source (*From*) and destination (*To*) squares that correspond to the best half-move to be made.
 
 <p align="center">
   <img src="img/ct_eft_20.png"/>
@@ -163,7 +164,7 @@ These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT
 [**Configuration File**](chess_transformers/configs/models/CT-ED-45.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-ED-45/averaged_CT-ED-45.pt) | 
 [**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-ED-45.zip) 
 
-This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE1222*](#le1222) dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made next, followed by the likely course of the game an arbitrary number of half-moves into the future. 
+This is the original transformer model (encoder *and* decoder) in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE22ct*](#le22ct) dataset. A classification head after the last decoder layer predicts a sequence of half-moves, starting with the best half-move to be made next, followed by the likely course of the game an arbitrary number of half-moves into the future. 
 
 <p align="center">
   <img src="img/ct_ed_45.png"/>
@@ -198,32 +199,91 @@ You <ins>do not</ins> need to download the model checkpoint manually. It will be
 |     **5**      | 1000  |  67   |  895   |  38   |          **8.60%**          | -410.58 <br> *(± 36.41)*  |           0.00%           |
 |     **6**      | 1000  |   6   |  987   |   7   |          **0.95%**          | -807.25 <br> *(± 113.69)* |           0.00%           |
 
+
+### *CT-EFT-85*
+
+[**Configuration File**](chess_transformers/configs/models/CT-EFT-85.py) | [**Checkpoint**](https://chesstransformers.blob.core.windows.net/checkpoints/CT-EFT-85/averaged_CT-EFT-85.pt) | 
+[**TensorBoard Logs**](https://chesstransformers.blob.core.windows.net/logs/CT-EFT-85.zip) 
+
+This is a larger version of the encoder from the original transformer model in [*Vaswani et al. (2017)*](https://arxiv.org/abs/1706.03762) trained on the [*LE22c*](#le22c) dataset. Its size is analogous to BERT<sub>BASE</sub> in [*Devlin et al. (2018)*](https://arxiv.org/abs/1810.04805). Two classification heads operate upon the encoder outputs at all chessboard squares to predict the best candidates for the source (*From*) and destination (*To*) squares that correspond to the best half-move to be made.
+
+<p align="center">
+  <img src="img/ct_eft_85.png"/>
+</p>
+
+This is essentially a sequence (or image) labeling task, where the sequence is the current state of the chessboard, and each square competes to be labeled as the *From* or *To* square.
+
+*CT-E-85* contains about 85 million parameters.
+
+```python
+from chess_transformers.play import load_model
+from chess_transformers.configs import import_config
+
+CONFIG = import_config("CT-EFT-85")
+model = load_model(CONFIG)
+```
+
+You <ins>do not</ins> need to download the model checkpoint manually. It will be downloaded automatically if required.
+
+#### Model Strength
+
+*CT-EFT-85* was evaluated against the [Fairy Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) chess engine at various strength levels [as predefined](https://github.com/lichess-org/fishnet/blob/dc4be23256e3e5591578f0901f98f5835a138d73/src/api.rs#L224) for use in the popular Stockfish chess bots on Lichess. The engine is run on an AMD Ryzen 7 3800X 8-Core Processor, with 8 CPU threads, and a hash table size of 8 GB. All other engine parameters are at their default values.
+
+These evaluation games can be viewed [here](chess_transformers/eval/games/CT-EFT-85/).
+
+| Strength Level | Games | Wins  | Losses | Draws |          Win Ratio          |      Elo Difference       | Likelihood of Superiority |
+| :------------: | :---: | :---: | :----: | :---: | :-------------------------: | :-----------------------: | :-----------------------: |
+|      $LL$      |  $n$  |  $w$  |  $l$   |  $d$  | $\frac{w + \frac{d}{2}}{n}$ |      $\Delta_{Elo}$       |           $LOS$           |
+|     **1**      | 1000  |  999  |   0    |   1   |         **99.95%**          | 1320.33 <br> *(± 34.06)*  |          100.00%          |
+|     **2**      | 1000  |  997  |   0    |   3   |         **99.85%**          | 1129.30 <br> *(± 101.08)* |          100.00%          |
+|     **3**      | 1000  |  979  |   0    |  21   |         **98.95%**          |  789.69 <br> *(± 79.22)*  |          100.00%          |
+|     **4**      | 1000  |  883  |   65   |  52   |         **90.90%**          |  399.81 <br> *(± 34.71)*  |          100.00%          |
+|     **5**      | 1000  |  712  |  183   |  105  |         **76.45%**          |  204.55 <br> *(± 23.52)*  |          100.00%          |
+|     **6**      | 1000  |  184  |  713   |  103  |         **23.55%**          | -204.55 <br> *(± 23.56)*  |           0.00%           |
+
+
 ## Datasets
 
-There are currently two training datasets available in *Chess Transformers*.
+There are currently five training datasets available in *Chess Transformers*.
 
-|       Dataset Name        |                                    Components                                    | # Datapoints |
-| :-----------------------: | :------------------------------------------------------------------------------: | :----------: |
-|  [***LE1222***](#le1222)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  13,287,522  |
-| [***LE1222x***](#le1222x) | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) | 127,684,720  |
+|      Dataset Name       |                                    Components                                    | # Datapoints |
+| :---------------------: | :------------------------------------------------------------------------------: | :----------: |
+|  [***ML23c***](#ml23c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  10,797,366  |
+| [***LE22ct***](#le22ct) | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  13,287,522  |
+|  [***GC22c***](#gc22c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  26,162,415  |
+|  [***LE22c***](#le22c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) | 127,684,720  |
+|  [***ML23d***](#ml23d)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) | 144,625,397  |
 
-### *LE1222*
+These datasets are sourced from groups of PGN files containing real games played by humans. There are currently three PGN filesets:
 
-This consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021. 
+- ***LE22*** consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021 up to December 2022
+  
+- ***ML23*** consists of Master-level games downloaded from [PGN mentor](https://www.pgnmentor.com/files.html), [TWIC](https://theweekinchess.com/twic), and [Caissabase](http://caissabase.co.uk/) in December 2023
+  
+- ***GC22*** consists of games from [a Kaggle dataset](https://www.kaggle.com/datasets/dimitrioskourtikakis/gm-games-chesscom), purported to contain chess games played by Grandmaster-titled players on chess.com up to July 2022
 
-On this data, we apply the following filters to keep only those games that:
+The lowercase letters at the end of every dataset denote specific filters that were applied to games from the corresponding PGN filesets:
 
-- were played up to December 2022 (20,241,368 games)
-- and used a time control of at least 5 minutes (2,073,780 games)
-- and ended in a checkmate (**274,794 games**)
+- "***c*** for games that ended in a checkmate
+- "***t***" for games that used a specific time control
+- "***d***" for games that ended decisively
 
-These 274,794 games consist of a total **13,287,522 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+### *ML23c*
 
-[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE1222.zip) The data is zipped and will need to be extracted.
+This consists of Master-level games downloaded from [PGN mentor](https://www.pgnmentor.com/files.html), [TWIC](https://theweekinchess.com/twic), and [Caissabase](http://caissabase.co.uk/) in December 2023.
+
+On this data (11,081,724 games), we apply the following filters to keep only those games that:
+
+- are unique (5,213,634 games) 
+- and ended in a checkmate (**250,694 games**)
+
+These 250,694 games consist of a total **10,797,366 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/ML23c.zip) The data is zipped and will need to be extracted.
 
 It consists of the following files:
 
-- **`LE1222.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+- **`ML23c.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
   - **`board_position`**, the chessboard layout, or positions of pieces on the board
   - **`turn`**, the color of the pieces of the player to play
   - **`white_kingside_castling_rights`**, whether white can castle kingside
@@ -233,23 +293,98 @@ It consists of the following files:
   - **`moves`**, 10 half-moves into the future made by both players
   - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
 
-### *LE1222x*
+### *LE22ct*
 
-This is an extended version of [*LE1222*](#le1222), and also consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021. 
+This consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021 up to December 2022.
 
-On this data, we apply the following filters to keep only those games that:
+On this data (20,241,368 games), we apply the following filters to keep only those games that:
 
-- were played up to December 2022 (20,241,368 games)
-- and ended in a checkmate (**2,751,394 games**)
+- used a time control of at least 5 minutes  (2,073,780 games)
+- and ended in a checkmate (**274,794 games**)
 
-These 2,751,394 games consist of a total **127,684,720 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+These 274,794 games consist of a total **13,287,522 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
 
-[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE1222x.zip) The data is zipped and will need to be extracted.
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE22ct.zip) The data is zipped and will need to be extracted.
 
 It consists of the following files:
 
-- **`LE1222.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+- **`LE22ct.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+  - **`board_position`**, the chessboard layout, or positions of pieces on the board
+  - **`turn`**, the color of the pieces of the player to play
+  - **`white_kingside_castling_rights`**, whether white can castle kingside
+  - **`white_queenside_castling_rights`**, whether white can castle queenside
+  - **`black_kingside_castling_rights`**, whether black can castle kingside
+  - **`black_queenside_castling_rights`**, whether black can castle queenside
+  - **`moves`**, 10 half-moves into the future made by both players
+  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
+
+### *GC22c*
+
+This consists of games from [a Kaggle dataset](https://www.kaggle.com/datasets/dimitrioskourtikakis/gm-games-chesscom), purported to contain chess games played by Grandmaster-titled players on chess.com up to July 2022.
+
+On this data (4,811,076 games), we apply the following filters to keep only those games that:
+
+- are unique (4,178,495 games) 
+- and ended in a checkmate (**593,693 games**)
+
+These 593,693 games consist of a total **26,162,415 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/GC22c.zip) The data is zipped and will need to be extracted.
+
+It consists of the following files:
+
+- **`GC22c.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+  - **`board_position`**, the chessboard layout, or positions of pieces on the board
+  - **`turn`**, the color of the pieces of the player to play
+  - **`white_kingside_castling_rights`**, w(hether white can castle kingside
+  - **`white_queenside_castling_rights`**, whether white can castle queenside
+  - **`black_kingside_castling_rights`**, whether black can castle kingside
+  - **`black_queenside_castling_rights`**, whether black can castle queenside
+  - **`moves`**, 10 half-moves into the future made by both players
+  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
+
+### *LE22c*
+
+This is an extended version of [*LE22ct*](#le22ct), and consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021 up to December 2022.
+
+On this data (20,241,368 games), we apply the following filters to keep only those games that:
+
+- ended in a checkmate (**2,751,394 games**)
+
+These 2,751,394 games consist of a total **127,684,720 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/LE22c.zip) The data is zipped and will need to be extracted.
+
+It consists of the following files:
+
+- **`LE22c.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
   - **`board_position`**, the board layout or positions of pieces on the board
+  - **`turn`**, the color of the pieces of the player to play
+  - **`white_kingside_castling_rights`**, whether white can castle kingside
+  - **`white_queenside_castling_rights`**, whether white can castle queenside
+  - **`black_kingside_castling_rights`**, whether black can castle kingside
+  - **`black_queenside_castling_rights`**, whether black can castle queenside
+  - **`moves`**, 10 half-moves into the future made by both players
+  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
+
+
+### *ML23d*
+
+This consists of Master-level games downloaded from [PGN mentor](https://www.pgnmentor.com/files.html), [TWIC](https://theweekinchess.com/twic), and [Caissabase](http://caissabase.co.uk/) in December 2023.
+
+On this data (11,081,724 games), we apply the following filters to keep only those games that:
+
+- are unique (5,213,634 games) 
+- and are decisive, i.e. a player won (**3,739,604 games**)
+
+These 3,739,604 games consist of a total **144,625,397 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
+
+[**Download here.**](https://chesstransformers.blob.core.windows.net/data/ML23d.zip) The data is zipped and will need to be extracted.
+
+It consists of the following files:
+
+- **`ML23d.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
+  - **`board_position`**, the chessboard layout, or positions of pieces on the board
   - **`turn`**, the color of the pieces of the player to play
   - **`white_kingside_castling_rights`**, whether white can castle kingside
   - **`white_queenside_castling_rights`**, whether white can castle queenside
@@ -273,7 +408,7 @@ from chess_transformers.play.utils import write_pgns
 from chess_transformers.play import load_model, warm_up, human_v_model 
 
 # Load configuration
-config_name = "CT-E-20"
+config_name = "CT-EFT-85"
 CONFIG = import_config(config_name)
 
 # Load assets
@@ -370,9 +505,9 @@ You can skip this step if you wish to use one of the [existing datasets](#datase
 
 - Collect PGN files containing games you wish to use for training the model.
 
-- Create a bash script for parsing these PGN files into a collection of FENs and moves using [*pgn-extract*](https://www.cs.kent.ac.uk/people/staff/djb/pgn-extract/), like in [**`LE1222.sh`**](#le1222), and execute it in the folder with the PGN files.
+- Create a bash script for parsing these PGN files into a collection of FENs and moves using [*pgn-extract*](https://www.cs.kent.ac.uk/people/staff/djb/pgn-extract/), like in [**`LE22ct.sh`**](#le22ct), and execute it in the folder with the PGN files.
 
-- Create a configuration file for the dataset, like in [**`LE1222.py`**](chess_transformers/configs/data/LE1222.py).
+- Create a configuration file for the dataset, like in [**`LE22ct.py`**](chess_transformers/configs/data/LE22ct.py).
 
 - Run [**`prep.py`**](chess_transformers/data/prep.py) like `python prep.py [config_name]`, or do it in your own Python script.
 

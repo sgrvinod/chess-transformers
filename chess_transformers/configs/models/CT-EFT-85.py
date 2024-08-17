@@ -2,7 +2,7 @@ import torch
 import pathlib
 
 from chess_transformers.train.utils import get_lr
-from chess_transformers.configs.data.LE22ct import *
+from chess_transformers.configs.data.LE22c import *
 from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDatasetFT
 from chess_transformers.configs.other.fairy_stockfish import *
@@ -15,7 +15,7 @@ from chess_transformers.transformers.models import ChessTransformerEncoderFT
 ############ Name #############
 ###############################
 
-NAME = "CT-EFT-20"  # name and identifier for this configuration
+NAME = "CT-EFT-85"  # name and identifier for this configuration
 
 ###############################
 ######### Dataloading #########
@@ -40,13 +40,13 @@ VOCAB_SIZES = {
     "black_queenside_castling_rights": len(BOOL),
     "board_position": len(PIECES),
 }  # vocabulary sizes
-D_MODEL = 512  # size of vectors throughout the transformer model
-N_HEADS = 8  # number of heads in the multi-head attention
+D_MODEL = 768  # size of vectors throughout the transformer model
+N_HEADS = 12  # number of heads in the multi-head attention
 D_QUERIES = 64  # size of query vectors (and also the size of the key vectors) in the multi-head attention
 D_VALUES = 64  # size of value vectors in the multi-head attention
-D_INNER = 2048  # an intermediate size in the position-wise FC
-N_LAYERS = 6  # number of layers in the Encoder and Decoder
-DROPOUT = 0.1  # dropout probability
+D_INNER = 4 * D_MODEL  # an intermediate size in the position-wise FC
+N_LAYERS = 12  # number of layers in the Encoder and Decoder
+DROPOUT = 0.2  # dropout probability
 N_MOVES = 1  # expected maximum length of move sequences in the model, <= MAX_MOVE_SEQUENCE_LENGTH
 DISABLE_COMPILATION = False  # disable model compilation?
 COMPILATION_MODE = "default"  # mode of model compilation (see torch.compile())
@@ -62,11 +62,11 @@ BATCHES_PER_STEP = (
     4  # perform a training step, i.e. update parameters, once every so many batches
 )
 PRINT_FREQUENCY = 1  # print status once every so many steps
-N_STEPS = 100000  # number of training steps
+N_STEPS = 500000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official transformer repo.
 STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
-LR_SCHEDULE = "vaswani"  # the learning rate schedule; see utils.py for learning rate schedule
-LR_DECAY = None  # the decay rate for 'exp_decay' schedule
+LR_SCHEDULE = "exp_decay"  # the learning rate schedule; see utils.py for learning rate schedule
+LR_DECAY = 0.06  # the decay rate for 'exp_decay' schedule
 LR = get_lr(
     step=STEP,
     d_model=D_MODEL,
@@ -93,9 +93,8 @@ LOGS_FOLDER = str(
 CHECKPOINT_FOLDER = str(
     pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
 )  # folder containing checkpoints
-TRAINING_CHECKPOINT = (
-    NAME + ".pt"
-)  # path to model checkpoint to resume training, None if none
+TRAINING_CHECKPOINT = None  # path to model checkpoint to resume training, None if none
+AVERAGE_STEPS = {491000, 492500, 494000, 495500, 497000, 498500, 500000}
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )
@@ -105,6 +104,10 @@ CHECKPOINT_AVG_SUFFIX = (
 FINAL_CHECKPOINT = (
     "averaged_" + NAME + ".pt"
 )  # final checkpoint to be used for eval/inference
+FINAL_CHECKPOINT_GDID = (
+    "1OHtg336ujlOjp5Kp0KjE1fAPF74aZpZD"  # Google Drive ID for download
+)
+
 
 ################################
 ########## Evaluation ##########
