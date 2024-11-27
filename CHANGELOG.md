@@ -1,10 +1,24 @@
 # Change Log
 
+## v0.3.1
+
+### Added
+
+* A [**`pyproject.toml`**
+file](https://github.com/sgrvinod/chess-transformers/blob/main/pyproject.toml) has been added in compliance with [PEP 660](https://peps.python.org/pep-0660/). While the inclusion of a `setup.py` file is not deprecated, its use as a command-line tool, such as in the legacy `setup.py develop` method for performing an editable installation is now deprecated. 
+
+### Changed
+
+* **`chess_transformers.train.datasets.ChessDataset`** was optimized for large datasets. A list of indices for the data split is no longer maintained or indexed in the dataset.
+* The `TRAINING_CHECKPOINT` parameter in each of **`chess_transformers.configs.models`** was set to `None` to reflect the correct conditions for beginning training of a model.
+* Dynamic shape tracing is disabled for the compilation of [*CT-ED-45*](https://github.com/sgrvinod/chess-transformers#ct-ed-45) to prevent memory leaks as seen in [#16](https://github.com/sgrvinod/chess-transformers/issues/16).
+* References to `torch.cuda.amp.GradScaler(...)` have been replaced by `torch.amp.GradScaler(device="cuda", ...)` following its deprecation.
+
 ## v0.3.0
 
 ### Added
 
-* There are 3 new datasets: [ML23c](https://github.com/sgrvinod/chess-transformers#ml23c), [GC22c](https://github.com/sgrvinod/chess-transformers#gc22c), and [ML23d](https://github.com/sgrvinod/chess-transformers#ml23d).
+* There are 3 new datasets: [*ML23c*](https://github.com/sgrvinod/chess-transformers#ml23c), [*GC22c*](https://github.com/sgrvinod/chess-transformers#gc22c), and [*ML23d*](https://github.com/sgrvinod/chess-transformers#ml23d).
 * A new naming convention for datasets is used. Datasets are now named in the format "[*PGN Fileset*][*Filters*]". For example, *LE1222* is now called [*LE22ct*](https://github.com/sgrvinod/chess-transformers#le22ct), where *LE22* is the name of the PGN fileset from which this dataset was derived, and "*c*", "*t*" are filters for games that ended in checkmates and games that used a specific time control respectively.
 * [*CT-EFT-85*](https://github.com/sgrvinod/chess-transformers#ct-eft-85) is a new trained model with about 85 million parameters.
 * **`chess_transformers.train.utils.get_lr()`** now accepts new arguments, `schedule` and `decay`, to accomodate a new learning rate schedule: exponential decay after warmup.

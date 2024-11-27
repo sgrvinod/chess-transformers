@@ -94,8 +94,8 @@ CHECKPOINT_FOLDER = str(
     pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
 )  # folder containing checkpoints
 TRAINING_CHECKPOINT = (
-    NAME + ".pt"
-)  # path to model checkpoint to resume training, None if none
+    None  # path to model checkpoint (NAME + ".pt") to resume training, None if none
+)
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )

@@ -4,7 +4,7 @@
 
 <h1 align="center"><i>Chess Transformers</i></h1>
 <p align="center"><i>Teaching transformers to play chess</i></p>
-<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.3.0"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
+<p align="center"> <a href="https://github.com/sgrvinod/chess-transformers/releases/tag/v0.3.1"><img alt="Version" src="https://img.shields.io/github/v/tag/sgrvinod/chess-transformers?label=version"></a> <a href="https://github.com/sgrvinod/chess-transformers/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/sgrvinod/chess-transformers?label=license"></a></p>
 <br>
 
 *Chess Transformers* is a library for training transformer models to play chess by learning from human games. 
