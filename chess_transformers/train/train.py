@@ -5,7 +5,7 @@ import torch.utils.data
 import torch.backends.cudnn as cudnn
 
 from tqdm import tqdm
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -96,7 +96,7 @@ def train_model(CONFIG):
     criterion = criterion.to(DEVICE)
 
     # AMP scaler
-    scaler = GradScaler(enabled=CONFIG.USE_AMP)
+    scaler = GradScaler(device=DEVICE, enabled=CONFIG.USE_AMP)
 
     # Find total epochs to train
     epochs = (CONFIG.N_STEPS // (len(train_loader) // CONFIG.BATCHES_PER_STEP)) + 1

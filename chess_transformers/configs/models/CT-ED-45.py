@@ -50,7 +50,7 @@ DROPOUT = 0.1  # dropout probability
 N_MOVES = 10  # expected maximum length of move sequences in the model, <= MAX_MOVE_SEQUENCE_LENGTH
 DISABLE_COMPILATION = False  # disable model compilation?
 COMPILATION_MODE = "default"  # mode of model compilation (see torch.compile())
-DYNAMIC_COMPILATION = True  # expect tensors with dynamic shapes?
+DYNAMIC_COMPILATION = False  # expect tensors with dynamic shapes?
 SAMPLING_K = 1  # k in top-k sampling model predictions during play
 MODEL = ChessTransformer  # custom PyTorch model to train
 
@@ -94,8 +94,8 @@ CHECKPOINT_FOLDER = str(
     pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
 )  # folder containing checkpoints
 TRAINING_CHECKPOINT = (
-    NAME + ".pt"
-)  # path to model checkpoint to resume training, None if none
+    None  # path to model checkpoint (NAME + ".pt") to resume training, None if none
+)
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )

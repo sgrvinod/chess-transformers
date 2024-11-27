@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chess-transformers"
+version = "0.3.1"
+description = "Teaching transformers to play chess."
+authors = [{ name = "Sagar Vinodababu", email = "sgrvinod@gmail.com" }]
+maintainers = [{ name = "Sagar Vinodababu", email = "sgrvinod@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.6.0"
+dependencies = [
+    "beautifulsoup4==4.12.3",
+    "chess==1.10.0",
+    "colorama==0.4.5",
+    "ipython==8.17.2",
+    "Markdown==3.3.4",
+    "py_cpuinfo==9.0.0",
+    "regex==2024.7.24",
+    "scipy==1.13.1",
+    "setuptools==69.0.3",
+    "tables==3.9.2",
+    "tabulate==0.9.0",
+    "torch==2.4.0",
+    "tqdm==4.64.1",
+    "tensorboard==2.18.0",
+]
+license = { text = "MIT License" }
+keywords = ["transformer", "chess", "pytorch", "deep learning", "chess engine"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+homepage = "https://github.com/sgrvinod/chess-transformers"
+source = "https://github.com/sgrvinod/chess-transformers"
+changelog = "https://github.com/sgrvinod/chess-transformers/blob/main/CHANGELOG.md"
+releasenotes = "https://github.com/sgrvinod/chess-transformers/releases"
+issues = "https://github.com/sgrvinod/chess-transformers/issues"
