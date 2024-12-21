@@ -26,6 +26,7 @@ BATCH_SIZE = 512  # batch size
 NUM_WORKERS = 8  # number of workers to use for dataloading
 PREFETCH_FACTOR = 2  # number of batches to prefetch per worker
 PIN_MEMORY = False  # pin to GPU memory when dataloading?
+VALIDATE = True  # perform validation?
 
 ###############################
 ############ Model ############
@@ -63,7 +64,7 @@ BATCHES_PER_STEP = (
 )
 PRINT_FREQUENCY = 1  # print status once every so many steps
 N_STEPS = 100000  # number of training steps
-WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly; twice the value in the paper, as in the official transformer repo.
+WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly
 STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
 LR_SCHEDULE = "vaswani"  # the learning rate schedule; see utils.py for learning rate schedule
 LR_DECAY = None  # the decay rate for 'exp_decay' schedule

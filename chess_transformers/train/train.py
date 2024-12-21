@@ -42,19 +42,20 @@ def train_model(CONFIG):
         prefetch_factor=CONFIG.PREFETCH_FACTOR,
         shuffle=True,
     )
-    val_loader = DataLoader(
-        dataset=CONFIG.DATASET(
-            data_folder=CONFIG.DATA_FOLDER,
-            h5_file=CONFIG.H5_FILE,
-            split="val",
-            n_moves=CONFIG.N_MOVES,
-        ),
-        batch_size=CONFIG.BATCH_SIZE,
-        num_workers=CONFIG.NUM_WORKERS,
-        pin_memory=CONFIG.PIN_MEMORY,
-        prefetch_factor=CONFIG.PREFETCH_FACTOR,
-        shuffle=False,
-    )
+    if CONFIG.VALIDATE:
+        val_loader = DataLoader(
+            dataset=CONFIG.DATASET(
+                data_folder=CONFIG.DATA_FOLDER,
+                h5_file=CONFIG.H5_FILE,
+                split="val",
+                n_moves=CONFIG.N_MOVES,
+            ),
+            batch_size=CONFIG.BATCH_SIZE,
+            num_workers=CONFIG.NUM_WORKERS,
+            pin_memory=CONFIG.PIN_MEMORY,
+            prefetch_factor=CONFIG.PREFETCH_FACTOR,
+            shuffle=False,
+        )
 
     # Model
     model = CONFIG.MODEL(CONFIG)
@@ -120,15 +121,16 @@ def train_model(CONFIG):
             CONFIG=CONFIG,
         )
 
-        # One epoch's validation
-        validate_epoch(
-            val_loader=val_loader,
-            model=compiled_model,
-            criterion=criterion,
-            epoch=epoch,
-            writer=writer,
-            CONFIG=CONFIG,
-        )
+        if CONFIG.VALIDATE:
+            # One epoch's validation
+            validate_epoch(
+                val_loader=val_loader,
+                model=compiled_model,
+                criterion=criterion,
+                epoch=epoch,
+                writer=writer,
+                CONFIG=CONFIG,
+            )
 
         # Save checkpoint
         save_checkpoint(epoch, model, optimizer, CONFIG.NAME, CONFIG.CHECKPOINT_FOLDER)

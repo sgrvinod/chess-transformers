@@ -6,7 +6,7 @@ import pathlib
 import torch.nn.functional as F
 
 
-def get_lr(step, d_model, warmup_steps, schedule="vaswani", decay=0.06):
+def get_lr(step, d_model, warmup_steps, peak_lr=1e-3, schedule="vaswani", decay=0.06):
     """
     The LR schedule.
 
@@ -17,21 +17,10 @@ def get_lr(step, d_model, warmup_steps, schedule="vaswani", decay=0.06):
         d_model (int): Size of vectors throughout the transformer model.
 
         warmup_steps (int): Number of warmup steps where learning rate
-        is increased linearly; twice the value in the paper, as in the
-        official T2T repo.
-
-    Returns:
-
-        float: Updated learning rate.
-
-    Args:
-
-        step (int): Training step number.
-
-        d_model (int): Size of vectors throughout the transformer model.
-
-        warmup_steps (int): Number of warmup steps where learning rate
         is increased linearly.
+
+        peak_lr (float): The learning rate at the end of the warmup
+        stage, i.e. the peak learning rate.
 
         schedule (str, optional): The learning rate schedule. Defaults
         to "vaswani", in which case the schedule in "Attention Is All
@@ -60,9 +49,9 @@ def get_lr(step, d_model, warmup_steps, schedule="vaswani", decay=0.06):
         )
     elif schedule == "exp_decay":
         if step <= warmup_steps:
-            lr = 1e-3 * step / warmup_steps
+            lr = peak_lr * step / warmup_steps
         else:
-            lr = 1e-3 * ((1 - decay) ** ((step - warmup_steps) / 10000))
+            lr = peak_lr * ((1 - decay) ** ((step - warmup_steps) / 10000))
     else:
         raise NotImplementedError
 

@@ -2,7 +2,7 @@ import torch
 import pathlib
 
 from chess_transformers.train.utils import get_lr
-from chess_transformers.configs.data.LE22c import *
+from chess_transformers.configs.data.LG24cepy import *
 from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDatasetFT
 from chess_transformers.configs.other.fairy_stockfish import *
@@ -15,7 +15,7 @@ from chess_transformers.transformers.models import ChessTransformerEncoderFT
 ############ Name #############
 ###############################
 
-NAME = "CT-EFT-85"  # name and identifier for this configuration
+NAME = "CT-EFT-85-II"  # name and identifier for this configuration
 
 ###############################
 ######### Dataloading #########
@@ -63,15 +63,19 @@ BATCHES_PER_STEP = (
     4  # perform a training step, i.e. update parameters, once every so many batches
 )
 PRINT_FREQUENCY = 1  # print status once every so many steps
-N_STEPS = 500000  # number of training steps
+N_STEPS = 120000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly
 STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
-LR_SCHEDULE = "exp_decay"  # the learning rate schedule; see utils.py for learning rate schedule
-LR_DECAY = 0.06  # the decay rate for 'exp_decay' schedule
+PEAK_LR = 1e-4  # the peak learning rate
+LR_SCHEDULE = (
+    "exp_decay"  # the learning rate schedule; see utils.py for learning rate schedule
+)
+LR_DECAY = 0.1  # the decay rate for 'exp_decay' schedule
 LR = get_lr(
     step=STEP,
     d_model=D_MODEL,
     warmup_steps=WARMUP_STEPS,
+    peak_lr=PEAK_LR,
     schedule=LR_SCHEDULE,
     decay=LR_DECAY,
 )  # see utils.py for learning rate schedule
@@ -94,10 +98,8 @@ LOGS_FOLDER = str(
 CHECKPOINT_FOLDER = str(
     pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
 )  # folder containing checkpoints
-TRAINING_CHECKPOINT = (
-    None  # path to model checkpoint (NAME + ".pt") to resume training, None if none
-)
-AVERAGE_STEPS = {491000, 492500, 494000, 495500, 497000, 498500, 500000}
+TRAINING_CHECKPOINT = "averaged_CT-EFT-85.pt"  # path to model checkpoint (NAME + ".pt") to resume/seed training, None if none
+AVERAGE_STEPS = {114000, 115500, 117000, 118500, 120000}
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )
