@@ -2,7 +2,7 @@ import torch
 import pathlib
 
 from chess_transformers.train.utils import get_lr
-from chess_transformers.configs.data.LG24cepy import *
+from chess_transformers.configs.data.LG24depy import *
 from chess_transformers.configs.other.stockfish import *
 from chess_transformers.train.datasets import ChessDatasetFT
 from chess_transformers.configs.other.fairy_stockfish import *
@@ -15,7 +15,7 @@ from chess_transformers.transformers.models import ChessTransformerEncoderFT
 ############ Name #############
 ###############################
 
-NAME = "CT-EFT-85-II"  # name and identifier for this configuration
+NAME = "CT-EFT-300"  # name and identifier for this configuration
 
 ###############################
 ######### Dataloading #########
@@ -41,12 +41,12 @@ VOCAB_SIZES = {
     "black_queenside_castling_rights": len(BOOL),
     "board_position": len(PIECES),
 }  # vocabulary sizes
-D_MODEL = 768  # size of vectors throughout the transformer model
-N_HEADS = 12  # number of heads in the multi-head attention
+D_MODEL = 1024  # size of vectors throughout the transformer model
+N_HEADS = 16  # number of heads in the multi-head attention
 D_QUERIES = 64  # size of query vectors (and also the size of the key vectors) in the multi-head attention
 D_VALUES = 64  # size of value vectors in the multi-head attention
 D_INNER = 4 * D_MODEL  # an intermediate size in the position-wise FC
-N_LAYERS = 12  # number of layers in the Encoder and Decoder
+N_LAYERS = 24  # number of layers in the Encoder and Decoder
 DROPOUT = 0.2  # dropout probability
 N_MOVES = 1  # expected maximum length of move sequences in the model, <= MAX_MOVE_SEQUENCE_LENGTH
 DISABLE_COMPILATION = False  # disable model compilation?
@@ -63,19 +63,18 @@ BATCHES_PER_STEP = (
     4  # perform a training step, i.e. update parameters, once every so many batches
 )
 PRINT_FREQUENCY = 1  # print status once every so many steps
-N_STEPS = 120000  # number of training steps
+N_STEPS = 1000000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly
 STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
-PEAK_LR = 1e-4  # the peak learning rate
 LR_SCHEDULE = (
     "exp_decay"  # the learning rate schedule; see utils.py for learning rate schedule
 )
-LR_DECAY = 0.1  # the decay rate for 'exp_decay' schedule
+PEAK_LR = 1e-3  # the learning rate at the end of the warmup stage, i.e. the peak learning rate.
+LR_DECAY = 0.03  # the decay rate for 'exp_decay' schedule
 LR = get_lr(
     step=STEP,
     d_model=D_MODEL,
     warmup_steps=WARMUP_STEPS,
-    peak_lr=PEAK_LR,
     schedule=LR_SCHEDULE,
     decay=LR_DECAY,
 )  # see utils.py for learning rate schedule
@@ -97,9 +96,13 @@ LOGS_FOLDER = str(
 
 CHECKPOINT_FOLDER = str(
     pathlib.Path(__file__).parent.parent.parent.resolve() / "checkpoints" / NAME
-)  # folder containing checkpoints
-TRAINING_CHECKPOINT = "averaged_CT-EFT-85.pt"  # path to model checkpoint (NAME + ".pt") to resume/seed training, None if none
-AVERAGE_STEPS = {114000, 115500, 117000, 118500, 120000}
+)  # absolute path to folder containing checkpoints
+SEED_CHECKPOINT = (
+    None  # absolute path to model checkpoint to seed/initialize training, None if none
+)
+TRAINING_CHECKPOINT = None  # relative path (relative to CHECKPOINT_FOLDER) to model checkpoint (NAME + ".pt") to resume/seed training, None if none
+
+AVERAGE_STEPS = {991000, 992500, 994000, 995500, 997000, 998500, 1000000}
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )

@@ -79,6 +79,14 @@ def train_model(CONFIG):
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print("\nLoaded checkpoint from epoch %d.\n" % start_epoch)
+    elif CONFIG.SEED_CHECKPOINT is not None:
+        checkpoint = torch.load(
+            os.path.join(CONFIG.SEED_CHECKPOINT),
+            weights_only=True,
+        )
+        start_epoch = 0
+        model.load_state_dict(checkpoint["model_state_dict"])
+        print("\nSeeded model with %s.\n" % CONFIG.SEED_CHECKPOINT)
     else:
         start_epoch = 0
 

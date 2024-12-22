@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 64"]
+requires      = ["setuptools >= 64"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,6 +25,7 @@ dependencies = [
     "torch==2.4.0",
     "tqdm==4.64.1",
     "tensorboard==2.18.0",
+    "numpy==1.26.4",
 ]
 license = { text = "MIT License" }
 keywords = ["transformer", "chess", "pytorch", "deep learning", "chess engine"]
@@ -37,8 +38,8 @@ classifiers = [
 ]
 
 [project.urls]
-homepage = "https://github.com/sgrvinod/chess-transformers"
-source = "https://github.com/sgrvinod/chess-transformers"
-changelog = "https://github.com/sgrvinod/chess-transformers/blob/main/CHANGELOG.md"
+homepage     = "https://github.com/sgrvinod/chess-transformers"
+source       = "https://github.com/sgrvinod/chess-transformers"
+changelog    = "https://github.com/sgrvinod/chess-transformers/blob/main/CHANGELOG.md"
 releasenotes = "https://github.com/sgrvinod/chess-transformers/releases"
-issues = "https://github.com/sgrvinod/chess-transformers/issues"
+issues       = "https://github.com/sgrvinod/chess-transformers/issues"
