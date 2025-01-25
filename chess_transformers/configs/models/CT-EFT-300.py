@@ -22,7 +22,7 @@ NAME = "CT-EFT-300"  # name and identifier for this configuration
 ###############################
 
 DATASET = ChessDatasetFT  # custom PyTorch dataset
-BATCH_SIZE = 512  # batch size
+BATCH_SIZE = 128  # batch size
 NUM_WORKERS = 8  # number of workers to use for dataloading
 PREFETCH_FACTOR = 2  # number of batches to prefetch per worker
 PIN_MEMORY = False  # pin to GPU memory when dataloading?
@@ -47,11 +47,11 @@ D_QUERIES = 64  # size of query vectors (and also the size of the key vectors) i
 D_VALUES = 64  # size of value vectors in the multi-head attention
 D_INNER = 4 * D_MODEL  # an intermediate size in the position-wise FC
 N_LAYERS = 24  # number of layers in the Encoder and Decoder
-DROPOUT = 0.2  # dropout probability
+DROPOUT = 0.1  # dropout probability
 N_MOVES = 1  # expected maximum length of move sequences in the model, <= MAX_MOVE_SEQUENCE_LENGTH
 DISABLE_COMPILATION = False  # disable model compilation?
 COMPILATION_MODE = "default"  # mode of model compilation (see torch.compile())
-DYNAMIC_COMPILATION = True  # expect tensors with dynamic shapes?
+DYNAMIC_COMPILATION = False  # expect tensors with dynamic shapes?
 SAMPLING_K = 1  # k in top-k sampling model predictions during play
 MODEL = ChessTransformerEncoderFT  # custom PyTorch model to train
 
@@ -60,17 +60,17 @@ MODEL = ChessTransformerEncoderFT  # custom PyTorch model to train
 ###############################
 
 BATCHES_PER_STEP = (
-    4  # perform a training step, i.e. update parameters, once every so many batches
+    16  # perform a training step, i.e. update parameters, once every so many batches
 )
 PRINT_FREQUENCY = 1  # print status once every so many steps
-N_STEPS = 1000000  # number of training steps
+N_STEPS = 700000  # number of training steps
 WARMUP_STEPS = 8000  # number of warmup steps where learning rate is increased linearly
 STEP = 1  # the step number, start from 1 to prevent math error in the 'LR' line
 LR_SCHEDULE = (
     "exp_decay"  # the learning rate schedule; see utils.py for learning rate schedule
 )
 PEAK_LR = 1e-3  # the learning rate at the end of the warmup stage, i.e. the peak learning rate.
-LR_DECAY = 0.03  # the decay rate for 'exp_decay' schedule
+LR_DECAY = 0.04  # the decay rate for 'exp_decay' schedule
 LR = get_lr(
     step=STEP,
     d_model=D_MODEL,
@@ -101,8 +101,7 @@ SEED_CHECKPOINT = (
     None  # absolute path to model checkpoint to seed/initialize training, None if none
 )
 TRAINING_CHECKPOINT = None  # relative path (relative to CHECKPOINT_FOLDER) to model checkpoint (NAME + ".pt") to resume/seed training, None if none
-
-AVERAGE_STEPS = {991000, 992500, 994000, 995500, 997000, 998500, 1000000}
+AVERAGE_STEPS = {691000, 692500, 694000, 695500, 697000, 698500, 700000}
 CHECKPOINT_AVG_PREFIX = (
     "step"  # prefix to add to checkpoint name when saving checkpoints for averaging
 )
