@@ -244,13 +244,12 @@ These evaluation games can be viewed [here](chess_transformers/evaluate/games/CT
 
 ## Datasets
 
-There are currently five training datasets available in *Chess Transformers*.
+There are currently four training datasets available in *Chess Transformers*.
 
 |      Dataset Name       |                                    Components                                    | # Datapoints |
 | :---------------------: | :------------------------------------------------------------------------------: | :----------: |
 |  [***ML23c***](#ml23c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  10,797,366  |
 | [***LE22ct***](#le22ct) | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  13,287,522  |
-|  [***GC22c***](#gc22c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) |  26,162,415  |
 |  [***LE22c***](#le22c)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) | 127,684,720  |
 |  [***ML23d***](#ml23d)  | Board positions, turn, castling rights, next-move sequence (up to 10 half-moves) | 144,625,397  |
 
@@ -259,8 +258,6 @@ These datasets are sourced from groups of PGN files containing real games played
 - ***LE22*** consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021 up to December 2022
   
 - ***ML23*** consists of Master-level games downloaded from [PGN mentor](https://www.pgnmentor.com/files.html), [TWIC](https://theweekinchess.com/twic), and [Caissabase](http://caissabase.co.uk/) in December 2023
-  
-- ***GC22*** consists of games from [a Kaggle dataset](https://www.kaggle.com/datasets/dimitrioskourtikakis/gm-games-chesscom), purported to contain chess games played by Grandmaster-titled players on chess.com up to July 2022
 
 The lowercase letters at the end of every dataset denote specific filters that were applied to games from the corresponding PGN filesets:
 
@@ -318,31 +315,6 @@ It consists of the following files:
   - **`moves`**, 10 half-moves into the future made by both players
   - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
 
-### *GC22c*
-
-This consists of games from [a Kaggle dataset](https://www.kaggle.com/datasets/dimitrioskourtikakis/gm-games-chesscom), purported to contain chess games played by Grandmaster-titled players on chess.com up to July 2022.
-
-On this data (4,811,076 games), we apply the following filters to keep only those games that:
-
-- are unique (4,178,495 games) 
-- and ended in a checkmate (**593,693 games**)
-
-These 593,693 games consist of a total **26,162,415 half-moves** made by the <ins>winners</ins> of the games, which alone constitute the dataset. For each such half-move, the chessboard, turn (white or black), and castling rights of both players before the move are calculated, as well as the sequence of half-moves beginning with this half-move up to 10 half-moves into the future. Draw potential is not calculated.
-
-[**Download here.**](https://chesstransformers.blob.core.windows.net/data/GC22c.zip) The data is zipped and will need to be extracted.
-
-It consists of the following files:
-
-- **`GC22c.h5`**, an HDF5 file containing two tables, one with the raw data and the other encoded with indices (that will be used in the transformer model), containing the following fields:
-  - **`board_position`**, the chessboard layout, or positions of pieces on the board
-  - **`turn`**, the color of the pieces of the player to play
-  - **`white_kingside_castling_rights`**, w(hether white can castle kingside
-  - **`white_queenside_castling_rights`**, whether white can castle queenside
-  - **`black_kingside_castling_rights`**, whether black can castle kingside
-  - **`black_queenside_castling_rights`**, whether black can castle queenside
-  - **`moves`**, 10 half-moves into the future made by both players
-  - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
-
 ### *LE22c*
 
 This is an extended version of [*LE22ct*](#le22ct), and consists of games from the [Lichess Elite Database](https://database.nikonoel.fr/) put together by [nikonoel](https://lichess.org/@/nikonoel), a collection of all standard chess games played on [Lichess.org](https://lichess.org/) by players with a Lichess Elo rating of 2400+ against players with a Lichess Elo rating of 2200+ up to December 2021, and players rated 2500+ against players rated 2300+ from December 2021 up to December 2022.
@@ -366,7 +338,6 @@ It consists of the following files:
   - **`black_queenside_castling_rights`**, whether black can castle queenside
   - **`moves`**, 10 half-moves into the future made by both players
   - **`length`**, the number of half-moves in the sequence, as this will be less than 10 at the end of the game
-
 
 ### *ML23d*
 
