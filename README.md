@@ -548,6 +548,25 @@ train_model(CONFIG)
 ```
 - Monitor training with [*TensorBoard*](https://www.tensorflow.org/tensorboard) with `tensorboard --logdir $CT_LOGS_DIR`.
 
+- Average checkpoints saved for averaging to produce the final checkpoint. Run [**`average_checkpoints.py`**](chess_transformers/train/average_checkpoints.py) like `python average_checkpoints.py [config_name]`, or do it in your own Python script.
+  
+```python
+
+from chess_transformers.train import average_checkpoints
+from chess_transformers.configs import import_config
+
+# Load configuration
+CONFIG = import_config("[config_name]")
+
+# Average checkpoints
+average_checkpoints(
+    checkpoint_folder=CONFIG.CHECKPOINT_FOLDER,
+    checkpoint_avg_prefix=CONFIG.CHECKPOINT_AVG_PREFIX,
+    checkpoint_avg_suffix=CONFIG.CHECKPOINT_AVG_SUFFIX,
+    final_checkpoint=CONFIG.FINAL_CHECKPOINT,
+)
+```
+
 ### Evaluation
 
 Run [**`evaluate.py`**](chess_transformers/evaluate/evaluate.py) like `python evaluate.py [config_name]`, or do it in your own Python notebook/script.

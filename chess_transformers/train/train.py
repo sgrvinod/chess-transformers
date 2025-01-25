@@ -364,11 +364,8 @@ def train_epoch(
             # Reset step time
             start_step_time = time.time()
 
-            # If this is the last one or two epochs, save checkpoints at
-            # regular intervals for averaging
-            if (
-                epoch in [epochs - 1, epochs - 2] and step % 1500 == 0
-            ):  # 'epoch' is 0-indexed
+            # If this step is marked for saving a checkpoint for averaging, save checkpoint
+            if step in CONFIG.AVERAGE_STEPS:
                 save_checkpoint(
                     epoch,
                     model,
