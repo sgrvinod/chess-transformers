@@ -441,10 +441,9 @@ def train_model(
     val_dataset.close()
 
     # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        **dataloader_config.to_dataloader_kwargs(),
-    )
+    train_dataloader_kwargs = dataloader_config.to_dataloader_kwargs()
+    train_dataloader_kwargs["shuffle"] = True
+    train_loader = DataLoader(train_dataset, **train_dataloader_kwargs)
     val_dataloader_kwargs = dataloader_config.to_dataloader_kwargs()
     val_dataloader_kwargs["shuffle"] = False
     val_dataloader_kwargs["drop_last"] = False

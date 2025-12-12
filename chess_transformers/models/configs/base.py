@@ -90,20 +90,20 @@ class DataLoaderConfig(BaseModel):
     dataset: Type[Dataset] = Field(
         ..., description="Dataset class to use for loading data"
     )
-    batch_size: int = Field(64, description="Number of samples per batch", gt=0)
+    batch_size: int = Field(512, description="Number of samples per batch", gt=0)
     num_workers: int = Field(
-        0, description="Number of subprocesses for data loading", ge=0
+        8, description="Number of subprocesses for data loading", ge=0
     )
     shuffle: bool = Field(True, description="Whether to shuffle data each epoch")
     pin_memory: bool = Field(
-        True, description="Copy tensors to pinned memory for faster GPU transfer"
+        False, description="Copy tensors to pinned memory for faster GPU transfer"
     )
     drop_last: bool = Field(False, description="Drop the last incomplete batch")
     prefetch_factor: Optional[int] = Field(
         2, description="Number of batches to prefetch per worker", ge=1
     )
     persistent_workers: bool = Field(
-        False, description="Keep worker processes alive between epochs"
+        True, description="Keep worker processes alive between epochs"
     )
     lmdb_filepath: Optional[str] = Field(
         None, description="Path to the LMDB database file for training data"

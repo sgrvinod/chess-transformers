@@ -73,6 +73,9 @@ config = ModelConfig(
         num_workers=8,
         prefetch_factor=2,
         pin_memory=False,
+        shuffle=True,
+        drop_last=True,
+        persistent_workers=True,
         lmdb_filepath="${CT_DATA_FOLDER}/LE25ct/LE25ct.lmdb",
     ),
     train_config=TrainConfig(

@@ -12,5 +12,3 @@ Notes:
     Use the `import_config` utility function from `chess_transformers.utilities.configs`
     to load configurations by name rather than importing directly.
 """
-
-__all__ = ["CT-E-19", "CT-ED-45", "CT-EFT-20", "CT-EFT-85"]
