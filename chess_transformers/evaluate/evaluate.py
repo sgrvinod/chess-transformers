@@ -2,8 +2,8 @@ import os
 import cpuinfo
 import argparse
 
-from chess_transformers.configs import import_config
 from chess_transformers.play.utils import write_pgns
+from chess_transformers.utilities import import_config
 from chess_transformers.play import model_v_engine, warm_up, load_model, load_engine
 
 
@@ -43,15 +43,21 @@ def evaluate_model(CONFIG):
                 },
                 rounds=500,
                 clock=None,
-                white_player_name="Fairy Stockfish @ LL {}".format(LL)
-                if model_color == "b"
-                else CONFIG.NAME,
-                black_player_name="Fairy Stockfish @ LL {}".format(LL)
-                if model_color == "w"
-                else CONFIG.NAME,
-                event=CONFIG.NAME + " v. Fairy Stockfish @ LL {}".format(LL)
-                if model_color == "w"
-                else "Fairy Stockfish @ LL {} v. ".format(LL) + CONFIG.NAME,
+                white_player_name=(
+                    "Fairy Stockfish @ LL {}".format(LL)
+                    if model_color == "b"
+                    else CONFIG.NAME
+                ),
+                black_player_name=(
+                    "Fairy Stockfish @ LL {}".format(LL)
+                    if model_color == "w"
+                    else CONFIG.NAME
+                ),
+                event=(
+                    CONFIG.NAME + " v. Fairy Stockfish @ LL {}".format(LL)
+                    if model_color == "w"
+                    else "Fairy Stockfish @ LL {} v. ".format(LL) + CONFIG.NAME
+                ),
             )
 
             # Write games to PGN

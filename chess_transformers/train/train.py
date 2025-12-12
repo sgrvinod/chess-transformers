@@ -1,513 +1,650 @@
-import time
-import argparse
-import torch.optim
-import torch.utils.data
-import torch.backends.cudnn as cudnn
+"""Training script for chess transformer models.
 
+This module provides a complete PyTorch training pipeline for training
+chess transformer models on LMDB datasets. It supports mixed precision
+training, gradient accumulation, learning rate scheduling with warmup,
+and checkpoint saving/resumption.
+
+Key Features:
+    - train_model: Main entry point for training with full configuration.
+    - train_one_epoch: Single training epoch with progress logging.
+    - validate: Validation loop returning loss and accuracy metrics.
+    - Checkpoint saving and resumption for fault-tolerant training.
+    - Mixed precision training via torch.amp for faster GPU training.
+    - Cosine annealing learning rate schedule with linear warmup.
+
+Notes:
+    The training script expects data in LMDB format created by
+    `chess_transformers.data.process`. Use the config system to specify
+    model architecture, data loading, and training hyperparameters.
+
+Example:
+    >>> from chess_transformers.train.train import train_model
+    >>> from chess_transformers.utilities.configs import import_config
+    >>> config = import_config("vole")
+    >>> train_model(config)
+"""
+
+import os
+
+import torch
+import torch.nn as nn
+from pathlib import Path
 from tqdm import tqdm
-from torch.amp import GradScaler
+from typing import Optional, Tuple, Union
+
+from torch.amp import GradScaler, autocast
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
-from chess_transformers.train.utils import *
-from chess_transformers.configs import import_config
+from chess_transformers.models.configs.base import ModelConfig
+from chess_transformers.models.criteria import LegalMoveSmoothing
+from chess_transformers.utilities.loggers import setup_logger
 
-DEVICE = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)  # CPU isn't really practical here
-cudnn.benchmark = False
+# Logger
+logger = setup_logger(__file__)
 
 
-def train_model(CONFIG):
-    """
-    Training and validation.
+def save_checkpoint(
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: LambdaLR,
+    scaler: GradScaler,
+    epoch: int,
+    global_step: int,
+    best_val_loss: float,
+) -> None:
+    """Save a training checkpoint.
 
-    Args:
-
-        CONFIG (dict): Configuration. See ./configs.
-    """
-    writer = SummaryWriter(log_dir=CONFIG.LOGS_FOLDER)
-
-    # Initialize data-loaders
-    train_loader = DataLoader(
-        dataset=CONFIG.DATASET(
-            data_folder=CONFIG.DATA_FOLDER,
-            h5_file=CONFIG.H5_FILE,
-            split="train",
-            n_moves=CONFIG.N_MOVES,
-        ),
-        batch_size=CONFIG.BATCH_SIZE,
-        num_workers=CONFIG.NUM_WORKERS,
-        pin_memory=CONFIG.PIN_MEMORY,
-        prefetch_factor=CONFIG.PREFETCH_FACTOR,
-        shuffle=True,
-    )
-    val_loader = DataLoader(
-        dataset=CONFIG.DATASET(
-            data_folder=CONFIG.DATA_FOLDER,
-            h5_file=CONFIG.H5_FILE,
-            split="val",
-            n_moves=CONFIG.N_MOVES,
-        ),
-        batch_size=CONFIG.BATCH_SIZE,
-        num_workers=CONFIG.NUM_WORKERS,
-        pin_memory=CONFIG.PIN_MEMORY,
-        prefetch_factor=CONFIG.PREFETCH_FACTOR,
-        shuffle=False,
-    )
-
-    # Model
-    model = CONFIG.MODEL(CONFIG)
-    model = model.to(DEVICE)
-
-    # Optimizer
-    optimizer = CONFIG.OPTIMIZER(
-        params=[p for p in model.parameters() if p.requires_grad],
-        lr=CONFIG.LR,
-        betas=CONFIG.BETAS,
-        eps=CONFIG.EPSILON,
-    )
-
-    # Load checkpoint if available
-    if CONFIG.TRAINING_CHECKPOINT is not None:
-        checkpoint = torch.load(
-            os.path.join(CONFIG.CHECKPOINT_FOLDER, CONFIG.TRAINING_CHECKPOINT),
-            weights_only=True,
-        )
-        start_epoch = checkpoint["epoch"] + 1
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        print("\nLoaded checkpoint from epoch %d.\n" % start_epoch)
-    else:
-        start_epoch = 0
-
-    # Compile model
-    compiled_model = torch.compile(
-        model,
-        mode=CONFIG.COMPILATION_MODE,
-        dynamic=CONFIG.DYNAMIC_COMPILATION,
-        disable=CONFIG.DISABLE_COMPILATION,
-    )
-
-    # Loss function
-    criterion = CONFIG.CRITERION(
-        eps=CONFIG.LABEL_SMOOTHING, n_predictions=CONFIG.N_MOVES
-    )
-    criterion = criterion.to(DEVICE)
-
-    # AMP scaler
-    scaler = GradScaler(device=DEVICE, enabled=CONFIG.USE_AMP)
-
-    # Find total epochs to train
-    epochs = (CONFIG.N_STEPS // (len(train_loader) // CONFIG.BATCHES_PER_STEP)) + 1
-
-    # Epochs
-    for epoch in range(start_epoch, epochs):
-        # Step
-        step = epoch * len(train_loader) // CONFIG.BATCHES_PER_STEP
-
-        # One epoch's training
-        train_epoch(
-            train_loader=train_loader,
-            model=compiled_model,
-            criterion=criterion,
-            optimizer=optimizer,
-            scaler=scaler,
-            epoch=epoch,
-            epochs=epochs,
-            step=step,
-            writer=writer,
-            CONFIG=CONFIG,
-        )
-
-        # One epoch's validation
-        validate_epoch(
-            val_loader=val_loader,
-            model=compiled_model,
-            criterion=criterion,
-            epoch=epoch,
-            writer=writer,
-            CONFIG=CONFIG,
-        )
-
-        # Save checkpoint
-        save_checkpoint(epoch, model, optimizer, CONFIG.NAME, CONFIG.CHECKPOINT_FOLDER)
-
-
-def train_epoch(
-    train_loader,
-    model,
-    criterion,
-    optimizer,
-    scaler,
-    epoch,
-    epochs,
-    step,
-    writer,
-    CONFIG,
-):
-    """
-    One epoch's training.
+    Saves model weights, optimizer state, scheduler state, and training
+    progress to a checkpoint file. Compatible with both compiled and
+    non-compiled models (PyTorch automatically unwraps compiled models).
 
     Args:
-
-        train_loader (torch.utils.data.DataLoader): Loader for training
-        data.
-
-        model (torch.nn.Module): Model.
-
-        criterion (torch.nn.Module): Loss criterion.
-
-        optimizer (torch.optim.adam.Adam): Optimizer.
-
-        scaler (torch.cuda.amp.GradScaler): AMP scaler.
-
-        epoch (int): Epoch number.
-
-        epochs (int): Total number of epochs.
-
-        step (int): Step number.
-
-        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard
-        writer.
-
-        CONFIG (dict): Configuration.
+        path: Path to save the checkpoint file.
+        model: The model to save.
+        optimizer: The optimizer state to save.
+        scheduler: The learning rate scheduler state to save.
+        scaler: The gradient scaler state (for AMP).
+        epoch: Current epoch number.
+        global_step: Current global training step.
+        best_val_loss: Best validation loss seen so far.
     """
-    model.train()  # training mode enables dropout
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+        "scaler_state_dict": scaler.state_dict(),
+        "epoch": epoch,
+        "global_step": global_step,
+        "best_val_loss": best_val_loss,
+    }
 
-    # Track some metrics
-    data_time = AverageMeter()  # data loading time
-    step_time = AverageMeter()  # forward prop. + back prop. time
-    losses = AverageMeter()  # loss
-    top1_accuracies = AverageMeter()  # top-1 accuracy of first move
-    top3_accuracies = AverageMeter()  # top-3 accuracy of first move
-    top5_accuracies = AverageMeter()  # top-5 accuracy of first move
+    torch.save(checkpoint, path)
+    logger.info(f"Checkpoint saved to {path}")
 
-    # Starting time
-    start_data_time = time.time()
-    start_step_time = time.time()
 
-    # Batches
-    for i, batch in enumerate(train_loader):
-        # Move to default device
-        for key in batch:
-            batch[key] = batch[key].to(DEVICE)
+def load_checkpoint(
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: LambdaLR,
+    scaler: GradScaler,
+    device: torch.device,
+) -> Tuple[int, int, float]:
+    """Load a training checkpoint.
 
-        # Time taken to load data
-        data_time.update(time.time() - start_data_time)
+    Args:
+        path: Path to the checkpoint file.
+        model: The model to load weights into.
+        optimizer: The optimizer to load state into.
+        scheduler: The scheduler to load state into.
+        scaler: The gradient scaler to load state into.
+        device: Device to map tensors to.
 
-        with torch.autocast(
-            device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
-        ):
-            # (Direct) Move prediction models
-            if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
-                # Forward prop.
-                predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
-                # Note: n_moves is how many moves into the future we are
-                # targeting for modeling. For an Encoder-Decoder model,
-                # this might be max_move_sequence_length. For an
-                # Encoder-only model, this will be 1.
+    Returns:
+        Tuple of (epoch, global_step, best_val_loss).
+    """
+    checkpoint = torch.load(path, map_location=device, weights_only=False)  # noqa: S614
 
-                # Loss
-                loss = criterion(
-                    predicted=predicted_moves,  # (N, n_moves, move_vocab_size)
-                    targets=batch["moves"][:, 1:],  # (N, n_moves)
-                    lengths=batch["lengths"],  # (N, 1)
-                )  # scalar
-                # Note: We don't pass the first move (the prompt
-                # "<move>") as it is not a target/next-move of anything
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-            # "From" and "To" square prediction models
-            elif CONFIG.NAME.startswith(("CT-EFT-")):
-                # Forward prop.
-                predicted_from_squares, predicted_to_squares = model(
-                    batch
-                )  # (N, 1, 64), (N, 1, 64)
+    if "scaler_state_dict" in checkpoint:
+        scaler.load_state_dict(checkpoint["scaler_state_dict"])
 
-                # Loss
-                loss = criterion(
-                    predicted=predicted_from_squares,
-                    targets=batch["from_squares"],
-                    lengths=batch["lengths"],
-                ) + criterion(
-                    predicted=predicted_to_squares,
-                    targets=batch["to_squares"],
-                    lengths=batch["lengths"],
-                )  # scalar
+    epoch = checkpoint["epoch"]
+    global_step = checkpoint["global_step"]
+    best_val_loss = checkpoint["best_val_loss"]
 
-            # Other models
+    logger.info(f"Loaded checkpoint from {path} (epoch {epoch}, step {global_step})")
+    return epoch, global_step, best_val_loss
+
+
+def train_one_epoch(
+    model: nn.Module,
+    dataloader: DataLoader,
+    loss_fn: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: LambdaLR,
+    scaler: GradScaler,
+    device: torch.device,
+    epoch: int,
+    global_step: int,
+    gradient_accumulation_steps: int = 1,
+    max_grad_norm: float = 1.0,
+    use_amp: bool = True,
+    use_legal_masks: bool = False,
+    log_every_n_steps: int = 100,
+) -> Tuple[float, float, float, int]:
+    """Train the model for one epoch.
+
+    Args:
+        model: The model to train.
+        dataloader: DataLoader for training data.
+        loss_fn: Loss function to use.
+        optimizer: Optimizer for parameter updates.
+        scheduler: Learning rate scheduler.
+        scaler: Gradient scaler for AMP.
+        device: Device to run training on.
+        epoch: Current epoch number (for logging).
+        global_step: Current global step count.
+        gradient_accumulation_steps: Number of steps to accumulate gradients.
+        max_grad_norm: Maximum gradient norm for clipping.
+        use_amp: Whether to use automatic mixed precision.
+        use_legal_masks: Whether to pass legal masks to the loss function.
+        log_every_n_steps: Log training metrics every N steps.
+
+    Returns:
+        Tuple of (average_loss, from_accuracy, to_accuracy, updated_global_step).
+    """
+    model.train()
+    optimizer.zero_grad()  # Ensure zero gradients at start of epoch
+    total_loss = 0.0
+    total_from_correct = 0
+    total_to_correct = 0
+    total_samples = 0
+    accumulated_loss = 0.0
+
+    progress_bar = tqdm(
+        dataloader,
+        desc=f"Epoch {epoch} [Train]",
+        leave=True,
+    )
+
+    for step, batch in enumerate(progress_bar):
+        # Move batch to device
+        batch = {k: v.to(device) for k, v in batch.items()}
+
+        # Forward pass with AMP
+        with autocast(device_type=device.type, enabled=use_amp):
+            from_logits, to_logits = model(batch)
+
+            # Prepare targets (squeeze extra dimension)
+            from_targets = batch["from_squares"].squeeze(-1)
+            to_targets = batch["to_squares"].squeeze(-1)
+
+            # Compute loss
+            if use_legal_masks:
+                loss = loss_fn(
+                    from_logits,
+                    to_logits,
+                    from_targets,
+                    to_targets,
+                    batch["legal_from_mask"],
+                    batch["legal_to_mask"],
+                )
             else:
-                raise NotImplementedError
+                loss = loss_fn(from_logits, to_logits, from_targets, to_targets)
 
-            loss = loss / CONFIG.BATCHES_PER_STEP
+            # Scale loss for gradient accumulation
+            loss = loss / gradient_accumulation_steps
 
-        # Backward prop.
+        # Backward pass (scaler handles enabled/disabled internally)
         scaler.scale(loss).backward()
 
-        # Keep track of losses
-        losses.update(
-            loss.item() * CONFIG.BATCHES_PER_STEP, batch["lengths"].sum().item()
+        accumulated_loss += loss.item()
+
+        # Update weights after accumulation
+        if (step + 1) % gradient_accumulation_steps == 0:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            scaler.step(optimizer)
+            scale_before = scaler.get_scale()
+            scaler.update()
+
+            # Only step scheduler if optimizer actually stepped (no inf/NaN grads)
+            if scaler.get_scale() >= scale_before:
+                scheduler.step()
+            optimizer.zero_grad()
+            global_step += 1
+
+            # Log periodically
+            if global_step % log_every_n_steps == 0:
+                current_lr = scheduler.get_last_lr()[0]
+                logger.info(
+                    f"Epoch {epoch} | Step {global_step} | "
+                    f"Loss: {accumulated_loss:.4f} | LR: {current_lr:.2e}"
+                )
+            accumulated_loss = 0.0
+
+        # Track metrics (use unscaled loss)
+        # Note: We track total summed loss and divide by total samples later for accuracy
+        batch_size = from_targets.size(0)
+        total_loss += loss.item() * gradient_accumulation_steps * batch_size
+        total_samples += batch_size
+
+        # Compute accuracy
+        from_preds = from_logits.squeeze(1).argmax(dim=-1)
+        to_preds = to_logits.squeeze(1).argmax(dim=-1)
+        total_from_correct += (from_preds == from_targets).sum().item()
+        total_to_correct += (to_preds == to_targets).sum().item()
+
+        # Update progress bar
+        progress_bar.set_postfix(
+            loss=f"{total_loss / total_samples:.4f}",
+            from_acc=f"{100 * total_from_correct / total_samples:.1f}%",
+            to_acc=f"{100 * total_to_correct / total_samples:.1f}%",
         )
 
-        # Keep track of accuracy (Direct) Move prediction models
-        if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
-            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
-                targets=batch["moves"][:, 1],  # (N)
-                k=[1, 3, 5],
-            )
+    avg_loss = total_loss / total_samples
+    from_accuracy = total_from_correct / total_samples
+    to_accuracy = total_to_correct / total_samples
 
-        elif CONFIG.NAME.startswith(("CT-EFT-")):
-            top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                logits=predicted_from_squares[:, 0, :],  # (N, 64)
-                targets=batch["from_squares"].squeeze(1),  # (N)
-                other_logits=predicted_to_squares[:, 0, :],  # (N, 64)
-                other_targets=batch["to_squares"].squeeze(1),  # (N)
-                k=[1, 3, 5],
-            )
-
-        else:
-            raise NotImplementedError
-        top1_accuracies.update(top1_accuracy, batch["lengths"].shape[0])
-        top3_accuracies.update(top3_accuracy, batch["lengths"].shape[0])
-        top5_accuracies.update(top5_accuracy, batch["lengths"].shape[0])
-
-        # Update model (i.e. perform a training step) only after
-        # gradients are accumulated from batches_per_step batches
-        if (i + 1) % CONFIG.BATCHES_PER_STEP == 0:
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
-
-            # This step is now complete
-            step += 1
-
-            # Update learning rate after each step
-            change_lr(
-                optimizer,
-                new_lr=get_lr(
-                    step=step,
-                    d_model=CONFIG.D_MODEL,
-                    warmup_steps=CONFIG.WARMUP_STEPS,
-                    schedule=CONFIG.LR_SCHEDULE,
-                    decay=CONFIG.LR_DECAY,
-                ),
-            )
-
-            # Time taken for this training step
-            step_time.update(time.time() - start_step_time)
-
-            # Print status
-            if step % CONFIG.PRINT_FREQUENCY == 0:
-                print(
-                    "Epoch {0}/{1}---"
-                    "Batch {2}/{3}---"
-                    "Step {4}/{5}---"
-                    "Data Time {data_time.val:.3f} ({data_time.avg:.3f})---"
-                    "Step Time {step_time.val:.3f} ({step_time.avg:.3f})---"
-                    "Loss {losses.val:.4f} ({losses.avg:.4f})---"
-                    "Top-5 {top5s.val:.4f} ({top5s.avg:.4f})".format(
-                        epoch + 1,
-                        epochs,
-                        i + 1,
-                        len(train_loader),
-                        step,
-                        CONFIG.N_STEPS,
-                        step_time=step_time,
-                        data_time=data_time,
-                        losses=losses,
-                        top5s=top5_accuracies,
-                    )
-                )
-
-            # Log to tensorboard
-            writer.add_scalar(
-                tag="train/loss", scalar_value=losses.val, global_step=step
-            )
-            writer.add_scalar(
-                tag="train/lr",
-                scalar_value=optimizer.param_groups[0]["lr"],
-                global_step=step,
-            )
-            writer.add_scalar(
-                tag="train/data_time", scalar_value=data_time.val, global_step=step
-            )
-            writer.add_scalar(
-                tag="train/step_time", scalar_value=step_time.val, global_step=step
-            )
-            writer.add_scalar(
-                tag="train/top1_accuracy",
-                scalar_value=top1_accuracies.val,
-                global_step=step,
-            )
-            writer.add_scalar(
-                tag="train/top3_accuracy",
-                scalar_value=top3_accuracies.val,
-                global_step=step,
-            )
-            writer.add_scalar(
-                tag="train/top5_accuracy",
-                scalar_value=top5_accuracies.val,
-                global_step=step,
-            )
-
-            # Reset step time
-            start_step_time = time.time()
-
-            # If this step is marked for saving a checkpoint for averaging, save checkpoint
-            if step in CONFIG.AVERAGE_STEPS:
-                save_checkpoint(
-                    epoch,
-                    model,
-                    optimizer,
-                    CONFIG.NAME,
-                    CONFIG.CHECKPOINT_FOLDER,
-                    prefix="step" + str(step) + "_",
-                )
-
-        # Reset data time
-        start_data_time = time.time()
+    return avg_loss, from_accuracy, to_accuracy, global_step
 
 
-def validate_epoch(val_loader, model, criterion, epoch, writer, CONFIG):
-    """
-    One epoch's validation.
+def validate(
+    model: nn.Module,
+    dataloader: DataLoader,
+    loss_fn: nn.Module,
+    device: torch.device,
+    epoch: int,
+    use_amp: bool = True,
+    use_legal_masks: bool = False,
+) -> Tuple[float, float, float]:
+    """Validate the model on the validation set.
 
     Args:
+        model: The model to validate.
+        dataloader: DataLoader for validation data.
+        loss_fn: Loss function to use.
+        device: Device to run validation on.
+        epoch: Current epoch number (for logging).
+        use_amp: Whether to use automatic mixed precision.
+        use_legal_masks: Whether to pass legal masks to the loss function.
 
-        val_loader (torch.utils.data.DataLoader): Loader for validation
-        data
-
-        model (torch.nn.Module): Model
-
-        criterion (torch.nn.Module): Loss criterion.
-
-        epoch (int): Epoch number.
-
-        writer (torch.utils.tensorboard.SummaryWriter): TensorBoard
-        writer.
-
-        CONFIG (dict): Configuration.
+    Returns:
+        Tuple of (average_loss, from_accuracy, to_accuracy).
     """
-    print("\n")
-    model.eval()  # eval mode disables dropout
+    model.eval()
+    total_loss = 0.0
+    total_from_correct = 0
+    total_to_correct = 0
+    total_samples = 0
 
-    # Prohibit gradient computation explicitly
+    progress_bar = tqdm(
+        dataloader,
+        desc=f"Epoch {epoch} [Val]",
+        leave=True,
+    )
+
     with torch.no_grad():
-        losses = AverageMeter()
-        top1_accuracies = AverageMeter()  # top-1 accuracy of first move
-        top3_accuracies = AverageMeter()  # top-3 accuracy of first move
-        top5_accuracies = AverageMeter()  # top-5 accuracy of first move
-        # Batches
-        for i, batch in tqdm(
-            enumerate(val_loader), desc="Validating", total=len(val_loader)
-        ):
-            # Move to default device
-            for key in batch:
-                batch[key] = batch[key].to(DEVICE)
+        for batch in progress_bar:
+            # Move batch to device
+            batch = {k: v.to(device) for k, v in batch.items()}
 
-            with torch.autocast(
-                device_type=DEVICE.type, dtype=torch.float16, enabled=CONFIG.USE_AMP
-            ):
-                # (Direct) Move prediction models
-                if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
-                    # Forward prop.
-                    predicted_moves = model(batch)  # (N, n_moves, move_vocab_size)
-                    # Note: n_moves is how many moves into the future we
-                    # are targeting for modeling. For an Encoder-Decoder
-                    # model, this might be max_move_sequence_length. For
-                    # an Encoder-only model, this will be 1.
+            # Forward pass with AMP
+            with autocast(device_type=device.type, enabled=use_amp):
+                from_logits, to_logits = model(batch)
 
-                    # Loss
-                    loss = criterion(
-                        predicted=predicted_moves,  # (N, n_moves, move_vocab_size)
-                        targets=batch["moves"][:, 1:],  # (N, n_moves)
-                        lengths=batch["lengths"],  # (N, 1)
-                    )  # scalar
-                    # Note: We don't pass the first move (the prompt
-                    # "<move>") as it is not a target/next-move of
-                    # anything
+                # Prepare targets
+                from_targets = batch["from_squares"].squeeze(-1)
+                to_targets = batch["to_squares"].squeeze(-1)
 
-                # "From" and "To" square prediction models
-                elif CONFIG.NAME.startswith(("CT-EFT-")):
-                    # Forward prop.
-                    predicted_from_squares, predicted_to_squares = model(
-                        batch
-                    )  # (N, 1, 64), (N, 1, 64)
-
-                    # Loss
-                    loss = criterion(
-                        predicted=predicted_from_squares,
-                        targets=batch["from_squares"],
-                        lengths=batch["lengths"],
-                    ) + criterion(
-                        predicted=predicted_to_squares,
-                        targets=batch["to_squares"],
-                        lengths=batch["lengths"],
-                    )  # scalar
-
-                # Other models
+                # Compute loss
+                if use_legal_masks:
+                    loss = loss_fn(
+                        from_logits,
+                        to_logits,
+                        from_targets,
+                        to_targets,
+                        batch["legal_from_mask"],
+                        batch["legal_to_mask"],
+                    )
                 else:
-                    raise NotImplementedError
+                    loss = loss_fn(from_logits, to_logits, from_targets, to_targets)
 
-            # Keep track of losses
-            losses.update(loss.item(), batch["lengths"].sum().item())
+            batch_size = from_targets.size(0)
+            total_loss += loss.item() * batch_size
+            total_samples += batch_size
 
-            # Keep track of accuracy (Direct) Move prediction models
-            if CONFIG.NAME.startswith(("CT-ED-", "CT-E-")):
-                top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                    logits=predicted_moves[:, 0, :],  # (N, move_vocab_size)
-                    targets=batch["moves"][:, 1],  # (N)
-                    k=[1, 3, 5],
+            # Compute accuracy
+            from_preds = from_logits.squeeze(1).argmax(dim=-1)
+            to_preds = to_logits.squeeze(1).argmax(dim=-1)
+            total_from_correct += (from_preds == from_targets).sum().item()
+            total_to_correct += (to_preds == to_targets).sum().item()
+
+            # Update progress bar
+            progress_bar.set_postfix(
+                loss=f"{total_loss / total_samples:.4f}",
+                from_acc=f"{100 * total_from_correct / total_samples:.1f}%",
+                to_acc=f"{100 * total_to_correct / total_samples:.1f}%",
+            )
+
+    avg_loss = total_loss / total_samples
+    from_accuracy = total_from_correct / total_samples
+    to_accuracy = total_to_correct / total_samples
+
+    return avg_loss, from_accuracy, to_accuracy
+
+
+def train_model(
+    config: ModelConfig,
+    checkpoint_folder: Optional[Union[str, Path]] = None,
+) -> None:
+    """Train a chess transformer model.
+
+    Main entry point for training. Creates model, datasets, dataloaders,
+    optimizer, scheduler, and runs the training loop with validation.
+
+    Args:
+        config: Model configuration containing architecture and training
+            parameters. Must have train_config and dataloader_config set.
+        checkpoint_folder: Path to save checkpoints. If None, uses
+            train_config.checkpoint_dir or CT_CHECKPOINTS_FOLDER env var.
+
+    Raises:
+        ValueError: If required config attributes are missing.
+        RuntimeError: If CUDA is not available.
+    """
+    # Validate config
+    if config.train_config is None:
+        logger.critical("train_config is required in config")
+        raise ValueError("config.train_config is required for training")
+    if config.dataloader_config is None:
+        logger.critical("dataloader_config is required in config")
+        raise ValueError("config.dataloader_config is required for training")
+    if config.dataloader_config.lmdb_filepath is None:
+        logger.critical("lmdb_filepath is required in dataloader_config")
+        raise ValueError("dataloader_config.lmdb_filepath is required for training")
+
+    train_config = config.train_config
+    dataloader_config = config.dataloader_config
+
+    # Set up device - CUDA is required for training
+    if not torch.cuda.is_available():
+        logger.critical("CUDA is not available. Training requires a GPU.")
+        raise RuntimeError("CUDA is not available. Training requires a GPU.")
+    device = torch.device("cuda")
+    logger.info(f"Using device: {device}")
+
+    # Enable TF32 for optimal performance on Ampere+ GPUs (A100, H100, H200, RTX 30xx+)
+    torch.set_float32_matmul_precision("high")
+    logger.info("Set float32 matmul precision to 'high' (TF32 enabled)")
+
+    # Expand environment variables in lmdb_filepath
+    lmdb_filepath = dataloader_config.lmdb_filepath
+    lmdb_path = Path(os.path.expandvars(lmdb_filepath))
+    if not lmdb_path.exists():
+        logger.critical(f"LMDB file not found: {lmdb_path}")
+        raise FileNotFoundError(f"LMDB file not found: {lmdb_path}")
+    logger.info(f"Loading data from {lmdb_path}")
+
+    # Set up checkpoint folder
+    # Priority: CLI arg > config.train_config.checkpoint_dir > CT_CHECKPOINTS_FOLDER env var
+    if checkpoint_folder is None:
+        if train_config.checkpoint_dir is not None:
+            checkpoint_folder = Path(train_config.checkpoint_dir)
+        else:
+            checkpoint_root = os.environ.get("CT_CHECKPOINTS_FOLDER")
+            if not checkpoint_root:
+                logger.critical(
+                    "No checkpoint folder specified. Provide via --checkpoint-folder, "
+                    "train_config.checkpoint_dir, or CT_CHECKPOINTS_FOLDER env var."
                 )
-
-            elif CONFIG.NAME.startswith(("CT-EFT-")):
-                top1_accuracy, top3_accuracy, top5_accuracy = topk_accuracy(
-                    logits=predicted_from_squares[:, 0, :],  # (N, 64)
-                    targets=batch["from_squares"].squeeze(1),  # (N)
-                    other_logits=predicted_to_squares[:, 0, :],  # (N, 64)
-                    other_targets=batch["to_squares"].squeeze(1),  # (N)
-                    k=[1, 3, 5],
+                raise OSError(
+                    "No checkpoint folder specified. Set train_config.checkpoint_dir "
+                    "or CT_CHECKPOINTS_FOLDER environment variable."
                 )
+            # Use name and version for subfolder when using env var
+            checkpoint_folder = (
+                Path(checkpoint_root) / f"{config.name}_{config.version}"
+            )
+    else:
+        checkpoint_folder = Path(checkpoint_folder)
+    checkpoint_folder.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Checkpoints will be saved to {checkpoint_folder}")
 
-            else:
-                raise NotImplementedError
-            top1_accuracies.update(top1_accuracy, batch["lengths"].shape[0])
-            top3_accuracies.update(top3_accuracy, batch["lengths"].shape[0])
-            top5_accuracies.update(top5_accuracy, batch["lengths"].shape[0])
+    # Create datasets using the dataset class from config
+    dataset_cls = dataloader_config.dataset
+    train_dataset = dataset_cls(lmdb_path=lmdb_path, split="train")
+    val_dataset = dataset_cls(lmdb_path=lmdb_path, split="val")
+    logger.info(f"Using dataset class: {dataset_cls.__name__}")
+    logger.info(f"Train dataset: {len(train_dataset):,} samples")
+    logger.info(f"Val dataset: {len(val_dataset):,} samples")
 
-        # Log to tensorboard
-        writer.add_scalar(
-            tag="val/loss", scalar_value=losses.avg, global_step=epoch + 1
+    # Check for legal masks (needed for LegalMoveSmoothing)
+    use_legal_masks = train_dataset.has_masks
+    is_legal_smoothing = issubclass(train_config.loss_fn, LegalMoveSmoothing)
+    if is_legal_smoothing and not use_legal_masks:
+        logger.critical(
+            "LegalMoveSmoothing loss requires legal masks in dataset. "
+            "Either use a different loss function or recreate dataset with legal_mask_mode."
         )
-        writer.add_scalar(
-            tag="val/top1_accuracy",
-            scalar_value=top1_accuracies.avg,
-            global_step=epoch + 1,
-        )
-        writer.add_scalar(
-            tag="val/top3_accuracy",
-            scalar_value=top3_accuracies.avg,
-            global_step=epoch + 1,
-        )
-        writer.add_scalar(
-            tag="val/top5_accuracy",
-            scalar_value=top5_accuracies.avg,
-            global_step=epoch + 1,
+        raise ValueError("LegalMoveSmoothing requires dataset with legal masks")
+
+    # Close datasets in main process before creating DataLoaders
+    train_dataset.close()
+    val_dataset.close()
+
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        **dataloader_config.to_dataloader_kwargs(),
+    )
+    val_dataloader_kwargs = dataloader_config.to_dataloader_kwargs()
+    val_dataloader_kwargs["shuffle"] = False
+    val_dataloader_kwargs["drop_last"] = False
+    val_loader = DataLoader(val_dataset, **val_dataloader_kwargs)
+
+    # Create model
+    model = config.model_type(config).to(device)
+    n_params = sum(p.numel() for p in model.parameters())
+    logger.info(
+        f"Model {config.name} v{config.version} created with {n_params:,} parameters"
+    )
+
+    # Apply torch.compile() with config settings (disable param skips compilation)
+    model = torch.compile(
+        model,
+        mode=config.compilation_mode,
+        dynamic=config.dynamic_compilation,
+        fullgraph=config.fullgraph_compilation,
+        disable=config.disable_compilation,
+    )
+    if config.disable_compilation:
+        logger.info("Model compilation disabled")
+    else:
+        logger.info(
+            f"Compiling model with mode='{config.compilation_mode}', "
+            f"dynamic={config.dynamic_compilation}, "
+            f"fullgraph={config.fullgraph_compilation}"
         )
 
-        print("\nValidation loss: %.3f" % losses.avg)
-        print("Validation top-1 accuracy: %.3f" % top1_accuracies.avg)
-        print("Validation top-3 accuracy: %.3f" % top3_accuracies.avg)
-        print("Validation top-5 accuracy: %.3f\n" % top5_accuracies.avg)
+    # Create optimizer using the class and args from config
+    optimizer = train_config.optimizer(
+        model.parameters(),
+        **train_config.optimizer_args,
+    )
+    logger.info(
+        f"Using optimizer: {train_config.optimizer.__name__} "
+        f"with args: {train_config.optimizer_args}"
+    )
+
+    # Compute total steps and logging frequency
+    steps_per_epoch = len(train_loader) // train_config.gradient_accumulation_steps
+    total_steps = steps_per_epoch * train_config.epochs
+    log_every_n_steps = max(1, int(steps_per_epoch * train_config.epochs_per_log))
+    logger.info(
+        f"Training for {train_config.epochs} epochs, "
+        f"{steps_per_epoch} steps/epoch, {total_steps} total steps"
+    )
+    logger.info(
+        f"Logging every {log_every_n_steps} steps "
+        f"(epochs_per_log={train_config.epochs_per_log})"
+    )
+
+    # Create LR scheduler - always use LambdaLR with the lr_schedule factory from config
+    lr_lambda = train_config.lr_schedule(
+        total_steps=total_steps,
+        **train_config.lr_schedule_args,
+    )
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+    logger.info(
+        f"Using LR schedule: {train_config.lr_schedule.__name__} "
+        f"(total_steps={total_steps}, {train_config.lr_schedule_args})"
+    )
+
+    # Create loss function by instantiating the class with args from config
+    loss_fn = train_config.loss_fn(**train_config.loss_fn_args)
+    logger.info(
+        f"Using loss function: {train_config.loss_fn.__name__} "
+        f"with args: {train_config.loss_fn_args}"
+    )
+
+    # Create gradient scaler for AMP (enabled param controls whether scaling is applied)
+    scaler = GradScaler(enabled=train_config.use_amp)
+    if train_config.use_amp:
+        logger.info("Using automatic mixed precision (AMP)")
+
+    # Initialize training state
+    start_epoch = 0
+    global_step = 0
+    best_val_loss = float("inf")
+
+    # Auto-resume from latest.pt if it exists
+    latest_checkpoint = checkpoint_folder / "latest.pt"
+    if latest_checkpoint.exists():
+        logger.info(f"Found existing checkpoint at {latest_checkpoint}, resuming...")
+        start_epoch, global_step, best_val_loss = load_checkpoint(
+            latest_checkpoint, model, optimizer, scheduler, scaler, device
+        )
+        start_epoch += 1  # Start from next epoch
+        logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
+
+        # Check if training is already complete
+        if start_epoch >= train_config.epochs:
+            logger.warning(
+                f"Checkpoint is at epoch {start_epoch - 1} (0-indexed), "
+                f"but config only has {train_config.epochs} epochs. "
+                "No training will be done. Increase epochs in config to continue."
+            )
+            train_dataset.close()
+            val_dataset.close()
+            return
+    else:
+        logger.info("No existing checkpoint found, starting fresh")
+
+    # Training loop
+    try:
+        for epoch in range(start_epoch, train_config.epochs):
+            logger.info(f"Starting epoch {epoch + 1}/{train_config.epochs}")
+
+            # Train
+            train_loss, train_from_acc, train_to_acc, global_step = train_one_epoch(
+                model=model,
+                dataloader=train_loader,
+                loss_fn=loss_fn,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                scaler=scaler,
+                device=device,
+                epoch=epoch + 1,
+                global_step=global_step,
+                gradient_accumulation_steps=train_config.gradient_accumulation_steps,
+                max_grad_norm=train_config.max_grad_norm,
+                use_amp=train_config.use_amp,
+                use_legal_masks=use_legal_masks and is_legal_smoothing,
+                log_every_n_steps=log_every_n_steps,
+            )
+            logger.info(
+                f"Epoch {epoch + 1} Train | Loss: {train_loss:.4f} | "
+                f"From Acc: {100 * train_from_acc:.2f}% | "
+                f"To Acc: {100 * train_to_acc:.2f}%"
+            )
+
+            # Validate every epoch
+            val_loss, val_from_acc, val_to_acc = validate(
+                model=model,
+                dataloader=val_loader,
+                loss_fn=loss_fn,
+                device=device,
+                epoch=epoch + 1,
+                use_amp=train_config.use_amp,
+                use_legal_masks=use_legal_masks and is_legal_smoothing,
+            )
+            logger.info(
+                f"Epoch {epoch + 1} Val | Loss: {val_loss:.4f} | "
+                f"From Acc: {100 * val_from_acc:.2f}% | "
+                f"To Acc: {100 * val_to_acc:.2f}%"
+            )
+
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_path = checkpoint_folder / "best.pt"
+                save_checkpoint(
+                    best_path,
+                    model,
+                    optimizer,
+                    scheduler,
+                    scaler,
+                    epoch,
+                    global_step,
+                    best_val_loss,
+                )
+                logger.info(f"New best model saved (val_loss={val_loss:.4f})")
+
+            # Save latest checkpoint (overwritten every epoch for resumption)
+            latest_path = checkpoint_folder / "latest.pt"
+            save_checkpoint(
+                latest_path,
+                model,
+                optimizer,
+                scheduler,
+                scaler,
+                epoch,
+                global_step,
+                best_val_loss,
+            )
+
+        logger.info("Training complete!")
+
+    finally:
+        # Clean up datasets even if an exception occurs
+        train_dataset.close()
+        val_dataset.close()
 
 
 if __name__ == "__main__":
-    # Get configuration
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config_name", type=str, help="Name of configuration file.")
-    args = parser.parse_args()
-    CONFIG = import_config(args.config_name)
+    # Command-line interface for training.
+    import argparse
 
-    # Train model
-    train_model(CONFIG)
+    from chess_transformers.utilities.configs import import_config
+
+    parser = argparse.ArgumentParser(description="Train a chess transformer model")
+    parser.add_argument("config_name", type=str, help="Name of configuration file")
+    parser.add_argument(
+        "--checkpoint-folder",
+        type=str,
+        default=None,
+        help="Override checkpoint folder (default: from config or env var)",
+    )
+    args = parser.parse_args()
+
+    # Import config and train
+    config = import_config(args.config_name)
+    train_model(config=config, checkpoint_folder=args.checkpoint_folder)
