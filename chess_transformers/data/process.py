@@ -229,7 +229,7 @@ def _compute_legal_masks(
     legal_to_mask = 0
 
     for move in legal_moves:
-        # python-chess uses 0=a1, 63=h8, but we use 0=a8, 63=h1
+        # python-chess uses 0=a1, 63=h8; the project uses 0=a8, 63=h1
         # Convert using: our_sq = (7 - rank) * 8 + file
         # where rank = chess_sq // 8 and file = chess_sq % 8
         chess_from = move.from_square
@@ -389,7 +389,7 @@ def process_data(
                     continue
 
                 # Iterate through moves in this game
-                # We only process the turns of the winner
+                # Only process the turns of the winner
                 game_start_index = global_index
 
                 for k in range(start_index, len(moves), 2):
@@ -465,12 +465,12 @@ def process_data(
     if val_split_fraction is not None:
         target_count = int(global_index * val_split_fraction)
         # Find the game boundary closest to the target count
-        # We want to ensure we don't split in the middle of a game, although
-        # with "random row access" training, strictly speaking, it matters less if games are shuffled,
-        # but keeping games distinct in train/val is good practice to avoid leakage.
+        # Find the game boundary closest to the target count to ensure that the
+        # split does not occur in the middle of a game. This prevents data
+        # leakage between training and validation sets.
 
-        # Since we processed sequentially, new_game_indices are sorted.
-        # We can just find the index in new_game_indices that is closest to target_count.
+        # Since processing is sequential, new_game_indices are sorted.
+        # Find the index in new_game_indices that is closest to target_count.
 
         # Simple search
         for idx in new_game_indices:

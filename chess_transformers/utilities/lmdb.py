@@ -38,8 +38,8 @@ Fork-Safety for PyTorch DataLoaders:
 import json
 import lmdb
 
-from contextlib import contextmanager
 from pathlib import Path
+from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterator, Optional, Union
 
 from chess_transformers.utilities.loggers import setup_logger

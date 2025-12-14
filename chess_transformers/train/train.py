@@ -12,6 +12,7 @@ Key Features:
     - Checkpoint saving and resumption for fault-tolerant training.
     - Mixed precision training via torch.amp for faster GPU training.
     - Cosine annealing learning rate schedule with linear warmup.
+    - Rich terminal display with progress bars and sparklines.
 
 Notes:
     The training script expects data in LMDB format created by
@@ -26,20 +27,28 @@ Example:
 """
 
 import os
-
 import torch
 import torch.nn as nn
-from pathlib import Path
-from tqdm import tqdm
-from typing import Optional, Tuple, Union
 
+from pathlib import Path
+from aim import Run as AimRun
+from datetime import datetime
+from aim import Repo as AimRepo
+from aim import Text as AimText
+from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader
+from typing import Any, Dict, Optional, Tuple, Union
 
+from chess_transformers.utilities.loggers import setup_logger
 from chess_transformers.models.configs.base import ModelConfig
 from chess_transformers.models.criteria import LegalMoveSmoothing
-from chess_transformers.utilities.loggers import setup_logger
+from chess_transformers.train.logs import (
+    MetricsTracker,
+    Timer,
+    TrainingDisplay,
+    compute_topk_accuracy,
+)
 
 # Logger
 logger = setup_logger(__file__)
@@ -82,7 +91,6 @@ def save_checkpoint(
     }
 
     torch.save(checkpoint, path)
-    logger.info(f"Checkpoint saved to {path}")
 
 
 def load_checkpoint(
@@ -123,6 +131,103 @@ def load_checkpoint(
     return epoch, global_step, best_val_loss
 
 
+def get_hparam_diff(
+    repo_path: str,
+    experiment: str,
+    current_hparams: Dict[str, Any],
+    max_changes: int = 20,
+) -> str:
+    """Generate a description by comparing current hparams to the previous run.
+
+    Queries the Aim repository for the most recent run in the same experiment
+    and computes the difference between its hyperparameters and the current
+    ones. This provides an automatic audit trail of what changed.
+
+    Args:
+        repo_path: Path to the Aim repository.
+        experiment: Name of the experiment to query runs from.
+        current_hparams: Dictionary of current hyperparameters to compare.
+        max_changes: Maximum number of changes to include in the description.
+
+    Returns:
+        A description string summarizing the changes:
+        - "First run in this experiment" if no previous runs exist.
+        - "No changes from previous run" if hparams are identical.
+        - "Changed: key1: old → new, key2: old → new, ..." otherwise.
+    """
+    # Check if the Aim repository exists
+    aim_dir = Path(repo_path) / ".aim"
+    if not aim_dir.exists():
+        return "First run in this experiment"
+
+    try:
+        repo = AimRepo(repo_path)
+        query = f"run.experiment == '{experiment}'"
+        run_collections = list(repo.query_runs(query).iter_runs())
+
+        if not run_collections:
+            return "First run in this experiment"
+
+        # Get the most recent run's hparams
+        # iter_runs() returns SingleRunSequenceCollection, access .run for the Run
+        latest_collection = max(run_collections, key=lambda rc: rc.run.created_at)
+        prev_hparams = dict(latest_collection.run.get("hparams", {}))
+
+        # Find differences
+        changes = []
+        all_keys = set(current_hparams.keys()) | set(prev_hparams.keys())
+        for key in sorted(all_keys):
+            old_val = prev_hparams.get(key)
+            new_val = current_hparams.get(key)
+            if old_val != new_val:
+                # Format values for readability
+                old_str = _format_hparam_value(old_val)
+                new_str = _format_hparam_value(new_val)
+                changes.append(f"{key}: {old_str} → {new_str}")
+
+        if not changes:
+            return "No changes from previous run"
+
+        # Truncate if too many changes
+        if len(changes) > max_changes:
+            shown = changes[:max_changes]
+            remaining = len(changes) - max_changes
+            return "Changed: " + ", ".join(shown) + f" (+{remaining} more)"
+
+        return "Changed: " + ", ".join(changes)
+
+    except Exception as e:
+        logger.warning(f"Could not compute hparam diff: {e}")
+        return "Could not determine changes from previous run"
+
+
+def _format_hparam_value(value: Any) -> str:
+    """Format a hyperparameter value for display in diff descriptions.
+
+    Args:
+        value: The hyperparameter value to format.
+
+    Returns:
+        A string representation suitable for display.
+    """
+    if value is None:
+        return "None"
+    if isinstance(value, float):
+        # Format floats nicely (scientific notation for small values)
+        if abs(value) < 0.001 and value != 0:
+            return f"{value:.2e}"
+        return f"{value:.4g}"
+    if isinstance(value, dict):
+        # Abbreviated dict representation
+        if len(value) > 3:
+            keys = list(value.keys())[:3]
+            return "{" + ", ".join(f"{k}: ..." for k in keys) + ", ...}"
+        return str(value)
+    if isinstance(value, list) and len(value) > 5:
+        return f"[{len(value)} items]"
+    return str(value)
+
+
 def train_one_epoch(
     model: nn.Module,
     dataloader: DataLoader,
@@ -133,12 +238,13 @@ def train_one_epoch(
     device: torch.device,
     epoch: int,
     global_step: int,
+    display: TrainingDisplay,
+    aim_run: AimRun,
     gradient_accumulation_steps: int = 1,
     max_grad_norm: float = 1.0,
     use_amp: bool = True,
     use_legal_masks: bool = False,
-    log_every_n_steps: int = 100,
-) -> Tuple[float, float, float, int]:
+) -> Tuple[Dict[str, float], int]:
     """Train the model for one epoch.
 
     Args:
@@ -151,30 +257,46 @@ def train_one_epoch(
         device: Device to run training on.
         epoch: Current epoch number (for logging).
         global_step: Current global step count.
+        display: TrainingDisplay for progress visualization.
+        aim_run: Aim Run instance for experiment tracking.
         gradient_accumulation_steps: Number of steps to accumulate gradients.
         max_grad_norm: Maximum gradient norm for clipping.
         use_amp: Whether to use automatic mixed precision.
         use_legal_masks: Whether to pass legal masks to the loss function.
-        log_every_n_steps: Log training metrics every N steps.
 
     Returns:
-        Tuple of (average_loss, from_accuracy, to_accuracy, updated_global_step).
+        Tuple of (metrics_dict, updated_global_step) where metrics_dict contains
+        loss, top1_acc, top3_acc, top5_acc, batch_load_time_avg, step_time_avg.
     """
     model.train()
-    optimizer.zero_grad()  # Ensure zero gradients at start of epoch
-    total_loss = 0.0
-    total_from_correct = 0
-    total_to_correct = 0
-    total_samples = 0
-    accumulated_loss = 0.0
+    optimizer.zero_grad()
 
-    progress_bar = tqdm(
-        dataloader,
-        desc=f"Epoch {epoch} [Train]",
-        leave=True,
-    )
+    # Initialize metrics tracker
+    metrics = MetricsTracker(k_values=[1, 3, 5])
 
-    for step, batch in enumerate(progress_bar):
+    # Step-level accumulators for Aim logging (aggregated across gradient accumulation)
+    step_loss_sum = 0.0
+    step_sample_count = 0
+    step_topk_correct = {1: 0, 3: 0, 5: 0}
+    step_batch_load_time_sum = 0.0
+    step_compute_time_sum = 0.0
+    last_complete_step_time = 0.0  # Time for the last completed optimizer step
+
+    # Start epoch in display
+    display.start_epoch(epoch, steps=len(dataloader), phase="Train")
+
+    # Start timing for first batch load
+    batch_timer = Timer().start()
+
+    for batch_idx, batch in enumerate(dataloader):
+        # Record batch loading time
+        batch_load_time = batch_timer.stop()
+        metrics.update_batch_load_time(batch_load_time)
+        step_batch_load_time_sum += batch_load_time
+
+        # Start compute timer
+        compute_timer = Timer().start()
+
         # Move batch to device
         batch = {k: v.to(device) for k, v in batch.items()}
 
@@ -205,12 +327,33 @@ def train_one_epoch(
         # Backward pass (scaler handles enabled/disabled internally)
         scaler.scale(loss).backward()
 
-        accumulated_loss += loss.item()
+        # Compute raw per-batch metrics
+        batch_size = from_targets.size(0)
+        raw_loss = loss.item() * gradient_accumulation_steps  # Unscaled loss
+        raw_topk = compute_topk_accuracy(
+            from_logits, to_logits, from_targets, to_targets, k_values=[1, 3, 5]
+        )
+
+        # Accumulate for step-level Aim logging
+        step_loss_sum += raw_loss * batch_size
+        step_sample_count += batch_size
+        for k in [1, 3, 5]:
+            step_topk_correct[k] += raw_topk[k]
+
+        # Update sliding window metrics (for display smoothing)
+        metrics.update_loss(raw_loss, batch_size)
+        metrics.update_accuracy_from_counts(raw_topk, batch_size)
+
+        # Record compute time for this batch
+        compute_time = compute_timer.stop()
+        step_compute_time_sum += compute_time
 
         # Update weights after accumulation
-        if (step + 1) % gradient_accumulation_steps == 0:
+        if (batch_idx + 1) % gradient_accumulation_steps == 0:
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), max_grad_norm
+            )
             scaler.step(optimizer)
             scale_before = scaler.get_scale()
             scaler.update()
@@ -221,39 +364,70 @@ def train_one_epoch(
             optimizer.zero_grad()
             global_step += 1
 
-            # Log periodically
-            if global_step % log_every_n_steps == 0:
-                current_lr = scheduler.get_last_lr()[0]
-                logger.info(
-                    f"Epoch {epoch} | Step {global_step} | "
-                    f"Loss: {accumulated_loss:.4f} | LR: {current_lr:.2e}"
-                )
-            accumulated_loss = 0.0
+            # Compute step-level metrics (averaged across all batches in step)
+            step_loss = step_loss_sum / step_sample_count
+            step_top1_acc = step_topk_correct[1] / step_sample_count
+            step_top3_acc = step_topk_correct[3] / step_sample_count
+            step_top5_acc = step_topk_correct[5] / step_sample_count
 
-        # Track metrics (use unscaled loss)
-        # Note: We track total summed loss and divide by total samples later for accuracy
-        batch_size = from_targets.size(0)
-        total_loss += loss.item() * gradient_accumulation_steps * batch_size
-        total_samples += batch_size
+            # Store step time for display
+            last_complete_step_time = step_compute_time_sum
+            metrics.update_step_time(last_complete_step_time)
 
-        # Compute accuracy
-        from_preds = from_logits.squeeze(1).argmax(dim=-1)
-        to_preds = to_logits.squeeze(1).argmax(dim=-1)
-        total_from_correct += (from_preds == from_targets).sum().item()
-        total_to_correct += (to_preds == to_targets).sum().item()
+            # Log every step (display uses smoothed values)
+            current_lr = scheduler.get_last_lr()[0]
+            log_msg = (
+                f"Step {global_step:>6} | "
+                f"Loss: {metrics.loss.average():>7.4f} | "
+                f"Top-1: {100 * metrics.get_topk_accuracy(1):>5.2f}% | "
+                f"LR: {current_lr:.2e}"
+            )
+            display.log(log_msg)
 
-        # Update progress bar
-        progress_bar.set_postfix(
-            loss=f"{total_loss / total_samples:.4f}",
-            from_acc=f"{100 * total_from_correct / total_samples:.1f}%",
-            to_acc=f"{100 * total_to_correct / total_samples:.1f}%",
+            # Track step-level metrics to Aim (aggregated across accumulation batches)
+            aim_run.track(
+                {
+                    "loss": step_loss,
+                    "top1_acc": step_top1_acc,
+                    "top3_acc": step_top3_acc,
+                    "top5_acc": step_top5_acc,
+                    "lr": current_lr,
+                    "grad_norm": grad_norm.item(),
+                    "amp_scale": scaler.get_scale(),
+                    "batch_load_time_ms": step_batch_load_time_sum * 1000,
+                    "step_time_ms": step_compute_time_sum * 1000,
+                },
+                context={"subset": "train"},
+                step=global_step,
+                epoch=epoch,
+            )
+
+            # Reset step-level accumulators
+            step_loss_sum = 0.0
+            step_sample_count = 0
+            step_topk_correct = {1: 0, 3: 0, 5: 0}
+            step_batch_load_time_sum = 0.0
+            step_compute_time_sum = 0.0
+
+        # Update display (uses smoothed values from sliding window)
+        current_lr = scheduler.get_last_lr()[0]
+        display.update_step(
+            loss=metrics.loss.average(),
+            top1_acc=metrics.get_topk_accuracy(1),
+            top3_acc=metrics.get_topk_accuracy(3),
+            top5_acc=metrics.get_topk_accuracy(5),
+            lr=current_lr,
+            data_time=metrics.batch_load_time.average(),
+            step_time=metrics.step_time.average(),  # Smoothed per-step time
         )
 
-    avg_loss = total_loss / total_samples
-    from_accuracy = total_from_correct / total_samples
-    to_accuracy = total_to_correct / total_samples
+        # Start timing for next batch load
+        batch_timer.start()
 
-    return avg_loss, from_accuracy, to_accuracy, global_step
+    # End epoch in display
+    display.end_epoch()
+
+    return metrics.get_metrics(), global_step
 
 
 def validate(
@@ -262,9 +436,12 @@ def validate(
     loss_fn: nn.Module,
     device: torch.device,
     epoch: int,
+    global_step: int,
+    display: TrainingDisplay,
+    aim_run: AimRun,
     use_amp: bool = True,
     use_legal_masks: bool = False,
-) -> Tuple[float, float, float]:
+) -> Dict[str, float]:
     """Validate the model on the validation set.
 
     Args:
@@ -273,26 +450,36 @@ def validate(
         loss_fn: Loss function to use.
         device: Device to run validation on.
         epoch: Current epoch number (for logging).
+        global_step: Current global training step (for Aim logging).
+        display: TrainingDisplay for progress visualization.
+        aim_run: Aim Run instance for experiment tracking.
         use_amp: Whether to use automatic mixed precision.
         use_legal_masks: Whether to pass legal masks to the loss function.
 
     Returns:
-        Tuple of (average_loss, from_accuracy, to_accuracy).
+        Dictionary with loss, top1_acc, top3_acc, top5_acc,
+        batch_load_time_avg, step_time_avg.
     """
     model.eval()
-    total_loss = 0.0
-    total_from_correct = 0
-    total_to_correct = 0
-    total_samples = 0
 
-    progress_bar = tqdm(
-        dataloader,
-        desc=f"Epoch {epoch} [Val]",
-        leave=True,
-    )
+    # Initialize metrics tracker with running average for full-epoch metrics
+    metrics = MetricsTracker(k_values=[1, 3, 5], use_running_average=True)
+
+    # Start epoch in display
+    display.start_epoch(epoch, steps=len(dataloader), phase="Val")
+
+    # Start timing for first batch load
+    batch_timer = Timer().start()
 
     with torch.no_grad():
-        for batch in progress_bar:
+        for batch in dataloader:
+            # Record batch loading time
+            batch_load_time = batch_timer.stop()
+            metrics.update_batch_load_time(batch_load_time)
+
+            # Start step timer
+            step_timer = Timer().start()
+
             # Move batch to device
             batch = {k: v.to(device) for k, v in batch.items()}
 
@@ -317,47 +504,77 @@ def validate(
                 else:
                     loss = loss_fn(from_logits, to_logits, from_targets, to_targets)
 
+            # Track metrics
             batch_size = from_targets.size(0)
-            total_loss += loss.item() * batch_size
-            total_samples += batch_size
+            metrics.update_loss(loss.item(), batch_size)
 
-            # Compute accuracy
-            from_preds = from_logits.squeeze(1).argmax(dim=-1)
-            to_preds = to_logits.squeeze(1).argmax(dim=-1)
-            total_from_correct += (from_preds == from_targets).sum().item()
-            total_to_correct += (to_preds == to_targets).sum().item()
+            # Compute top-k accuracy
+            metrics.update_accuracy(from_logits, to_logits, from_targets, to_targets)
 
-            # Update progress bar
-            progress_bar.set_postfix(
-                loss=f"{total_loss / total_samples:.4f}",
-                from_acc=f"{100 * total_from_correct / total_samples:.1f}%",
-                to_acc=f"{100 * total_to_correct / total_samples:.1f}%",
+            # Record step time
+            step_time = step_timer.stop()
+            metrics.update_step_time(step_time)
+
+            # Update display (only loss/accuracy, preserve training LR/timing in "Other" panel)
+            display.update_step(
+                loss=metrics.loss.average(),
+                top1_acc=metrics.get_topk_accuracy(1),
+                top3_acc=metrics.get_topk_accuracy(3),
+                top5_acc=metrics.get_topk_accuracy(5),
+                # lr, data_time, step_time omitted to preserve training values
             )
 
-    avg_loss = total_loss / total_samples
-    from_accuracy = total_from_correct / total_samples
-    to_accuracy = total_to_correct / total_samples
+            # Start timing for next batch load
+            batch_timer.start()
 
-    return avg_loss, from_accuracy, to_accuracy
+    # End epoch in display
+    display.end_epoch()
+
+    # Track validation metrics to Aim (once per epoch)
+    final_metrics = metrics.get_metrics()
+    aim_run.track(
+        {
+            "loss": final_metrics["loss"],
+            "top1_acc": final_metrics["top1_acc"],
+            "top3_acc": final_metrics["top3_acc"],
+            "top5_acc": final_metrics["top5_acc"],
+        },
+        context={"subset": "val"},
+        step=global_step,
+        epoch=epoch,
+    )
+
+    return final_metrics
 
 
 def train_model(
     config: ModelConfig,
     checkpoint_folder: Optional[Union[str, Path]] = None,
+    resume_run: Optional[str] = None,
 ) -> None:
     """Train a chess transformer model.
 
     Main entry point for training. Creates model, datasets, dataloaders,
     optimizer, scheduler, and runs the training loop with validation.
 
+    Each training run gets its own checkpoint subfolder named after the run
+    (e.g., `Vole_v1.0_20251214_160305`). This prevents checkpoint overwrites
+    and makes it easy to identify which checkpoints belong to which run.
+
     Args:
         config: Model configuration containing architecture and training
             parameters. Must have train_config and dataloader_config set.
-        checkpoint_folder: Path to save checkpoints. If None, uses
+        checkpoint_folder: Base path for checkpoints. If None, uses
             train_config.checkpoint_dir or CT_CHECKPOINTS_FOLDER env var.
+            The actual checkpoints are saved to a subfolder named after the run.
+        resume_run: Name of an existing run to resume (e.g.,
+            "Vole_v1.0_20251214_160305"). If provided, loads checkpoints from
+            that run's folder and continues logging to the same Aim run.
+            If None, starts a fresh run with a new timestamp-based name.
 
     Raises:
-        ValueError: If required config attributes are missing.
+        ValueError: If required config attributes are missing, or if resume_run
+            is specified but the run doesn't exist.
         RuntimeError: If CUDA is not available.
     """
     # Validate config
@@ -393,11 +610,12 @@ def train_model(
         raise FileNotFoundError(f"LMDB file not found: {lmdb_path}")
     logger.info(f"Loading data from {lmdb_path}")
 
-    # Set up checkpoint folder
+    # Set up base checkpoint directory
     # Priority: CLI arg > config.train_config.checkpoint_dir > CT_CHECKPOINTS_FOLDER env var
+    # The actual checkpoint folder will be base_checkpoint_dir / run_name
     if checkpoint_folder is None:
         if train_config.checkpoint_dir is not None:
-            checkpoint_folder = Path(train_config.checkpoint_dir)
+            base_checkpoint_dir = Path(train_config.checkpoint_dir)
         else:
             checkpoint_root = os.environ.get("CT_CHECKPOINTS_FOLDER")
             if not checkpoint_root:
@@ -409,14 +627,10 @@ def train_model(
                     "No checkpoint folder specified. Set train_config.checkpoint_dir "
                     "or CT_CHECKPOINTS_FOLDER environment variable."
                 )
-            # Use name and version for subfolder when using env var
-            checkpoint_folder = (
-                Path(checkpoint_root) / f"{config.name}_{config.version}"
-            )
+            base_checkpoint_dir = Path(checkpoint_root)
     else:
-        checkpoint_folder = Path(checkpoint_folder)
-    checkpoint_folder.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Checkpoints will be saved to {checkpoint_folder}")
+        base_checkpoint_dir = Path(checkpoint_folder)
+    base_checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Create datasets using the dataset class from config
     dataset_cls = dataloader_config.dataset
@@ -443,6 +657,7 @@ def train_model(
     # Create dataloaders
     train_dataloader_kwargs = dataloader_config.to_dataloader_kwargs()
     train_dataloader_kwargs["shuffle"] = True
+    train_dataloader_kwargs["drop_last"] = True
     train_loader = DataLoader(train_dataset, **train_dataloader_kwargs)
     val_dataloader_kwargs = dataloader_config.to_dataloader_kwargs()
     val_dataloader_kwargs["shuffle"] = False
@@ -456,7 +671,7 @@ def train_model(
         f"Model {config.name} v{config.version} created with {n_params:,} parameters"
     )
 
-    # Apply torch.compile() with config settings (disable param skips compilation)
+    # Apply torch.compile() with config settings
     model = torch.compile(
         model,
         mode=config.compilation_mode,
@@ -483,17 +698,12 @@ def train_model(
         f"with args: {train_config.optimizer_args}"
     )
 
-    # Compute total steps and logging frequency
+    # Compute total steps
     steps_per_epoch = len(train_loader) // train_config.gradient_accumulation_steps
     total_steps = steps_per_epoch * train_config.epochs
-    log_every_n_steps = max(1, int(steps_per_epoch * train_config.epochs_per_log))
     logger.info(
         f"Training for {train_config.epochs} epochs, "
         f"{steps_per_epoch} steps/epoch, {total_steps} total steps"
-    )
-    logger.info(
-        f"Logging every {log_every_n_steps} steps "
-        f"(epochs_per_log={train_config.epochs_per_log})"
     )
 
     # Create LR scheduler - always use LambdaLR with the lr_schedule factory from config
@@ -519,15 +729,121 @@ def train_model(
     if train_config.use_amp:
         logger.info("Using automatic mixed precision (AMP)")
 
+    # Initialize Aim repository path and experiment name
+    aim_repo_path = str(train_config.log_dir) if train_config.log_dir else None
+    experiment_name = f"{config.name}_v{config.version}"
+
+    # Build complete hyperparameters dictionary
+    hparams = {
+        # ModelConfig - architecture
+        "model_type": config.model_type.__name__,
+        "model_name": config.name,
+        "model_version": config.version,
+        "vocab_sizes": config.vocab_sizes,
+        "d_model": config.d_model,
+        "n_heads": config.n_heads,
+        "d_ff": config.d_ff,
+        "n_layers": config.n_layers,
+        "dropout": config.dropout,
+        "share_rel_pos_embeddings": config.share_rel_pos_embeddings,
+        "disable_compilation": config.disable_compilation,
+        "compilation_mode": config.compilation_mode,
+        "dynamic_compilation": config.dynamic_compilation,
+        "fullgraph_compilation": config.fullgraph_compilation,
+        # TrainConfig - training
+        "epochs": train_config.epochs,
+        "gradient_accumulation_steps": train_config.gradient_accumulation_steps,
+        "optimizer": train_config.optimizer.__name__,
+        "optimizer_args": train_config.optimizer_args,
+        "lr_schedule": train_config.lr_schedule.__name__,
+        "lr_schedule_args": train_config.lr_schedule_args,
+        "max_grad_norm": train_config.max_grad_norm,
+        "use_amp": train_config.use_amp,
+        "loss_fn": train_config.loss_fn.__name__,
+        "loss_fn_args": train_config.loss_fn_args,
+        "log_dir": str(train_config.log_dir) if train_config.log_dir else None,
+        "checkpoint_dir": (
+            str(train_config.checkpoint_dir) if train_config.checkpoint_dir else None
+        ),
+        # DataLoaderConfig - data loading
+        "dataset": dataloader_config.dataset.__name__,
+        "batch_size": dataloader_config.batch_size,
+        "num_workers": dataloader_config.num_workers,
+        "shuffle": dataloader_config.shuffle,
+        "pin_memory": dataloader_config.pin_memory,
+        "drop_last": dataloader_config.drop_last,
+        "prefetch_factor": dataloader_config.prefetch_factor,
+        "persistent_workers": dataloader_config.persistent_workers,
+        "lmdb_filepath": str(lmdb_path),
+        # Computed values
+        "n_params": n_params,
+    }
+
     # Initialize training state
     start_epoch = 0
     global_step = 0
     best_val_loss = float("inf")
 
-    # Auto-resume from latest.pt if it exists
-    latest_checkpoint = checkpoint_folder / "latest.pt"
-    if latest_checkpoint.exists():
-        logger.info(f"Found existing checkpoint at {latest_checkpoint}, resuming...")
+    # Determine run name and set up checkpoint folder
+    if resume_run is not None:
+        # Resume an existing run
+        run_name = resume_run
+        checkpoint_folder = base_checkpoint_dir / run_name
+
+        # Verify the checkpoint folder and checkpoint exist
+        latest_checkpoint = checkpoint_folder / "latest.pt"
+        if not latest_checkpoint.exists():
+            logger.critical(
+                f"Cannot resume run '{run_name}': checkpoint not found at "
+                f"{latest_checkpoint}"
+            )
+            raise ValueError(
+                f"Cannot resume run '{run_name}': no checkpoint found. "
+                f"Expected checkpoint at {latest_checkpoint}"
+            )
+
+        # Find the existing Aim run by name (requires configured log directory)
+        if not aim_repo_path:
+            logger.critical(
+                "Cannot resume run: no log directory configured. "
+                "Set train_config.log_dir to enable run resumption."
+            )
+            raise ValueError(
+                "Cannot resume run: no Aim repository configured. "
+                "Set train_config.log_dir to enable run resumption."
+            )
+
+        try:
+            repo = AimRepo(aim_repo_path)
+            query = f"run.name == '{run_name}'"
+            matching_runs = list(repo.query_runs(query).iter_runs())
+            if matching_runs:
+                # Get the run hash and reconnect
+                run_hash = matching_runs[0].hash
+                aim_run = AimRun(
+                    run_hash=run_hash,
+                    repo=aim_repo_path,
+                    experiment=experiment_name,
+                )
+                logger.info(f"Reconnected to Aim run: {run_name} ({run_hash})")
+            else:
+                logger.critical(f"Cannot find Aim run with name '{run_name}'")
+                raise ValueError(
+                    f"Cannot resume run '{run_name}': Aim run not found in "
+                    f"repository at {aim_repo_path}."
+                )
+        except ValueError:
+            # Re-raise ValueError without wrapping
+            raise
+        except Exception as e:
+            logger.critical(f"Error querying Aim repository: {e}")
+            raise ValueError(
+                f"Cannot resume run '{run_name}': failed to query Aim repository. "
+                f"Error: {e}"
+            )
+
+        # Load the checkpoint
+        logger.info(f"Resuming from checkpoint: {latest_checkpoint}")
         start_epoch, global_step, best_val_loss = load_checkpoint(
             latest_checkpoint, model, optimizer, scheduler, scaler, device
         )
@@ -541,62 +857,136 @@ def train_model(
                 f"but config only has {train_config.epochs} epochs. "
                 "No training will be done. Increase epochs in config to continue."
             )
+            aim_run.close()
             train_dataset.close()
             val_dataset.close()
             return
     else:
-        logger.info("No existing checkpoint found, starting fresh")
+        # Start a fresh run with a new timestamp-based name
+        run_name = (
+            f"{config.name}_v{config.version}_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+        checkpoint_folder = base_checkpoint_dir / run_name
+        checkpoint_folder.mkdir(parents=True, exist_ok=True)
+
+        # Auto-generate description by comparing to previous run
+        description = get_hparam_diff(aim_repo_path, experiment_name, hparams)
+        logger.info(f"Run description: {description}")
+
+        # Initialize Aim repository if it doesn't exist
+        aim_dir = Path(aim_repo_path) / ".aim"
+        if not aim_dir.exists():
+            AimRepo.from_path(aim_repo_path, init=True)
+            logger.info(f"Initialized new Aim repository at {aim_repo_path}")
+
+        # Create the Aim run with all metadata
+        aim_run = AimRun(repo=aim_repo_path, experiment=experiment_name)
+        aim_run.name = run_name
+        aim_run.description = description
+        aim_run["hparams"] = hparams
+        logger.info(f"Initialized new Aim run: {aim_run.name} ({aim_run.hash})")
+        logger.info("Starting fresh training run")
+
+    logger.info(f"Checkpoints will be saved to {checkpoint_folder}")
 
     # Training loop
     try:
-        for epoch in range(start_epoch, train_config.epochs):
-            logger.info(f"Starting epoch {epoch + 1}/{train_config.epochs}")
+        # Create the rich training display
+        remaining_epochs = train_config.epochs - start_epoch
+        with TrainingDisplay(
+            total_epochs=remaining_epochs,
+            model_name=f"{config.name} v{config.version}",
+        ) as display:
+            for epoch in range(start_epoch, train_config.epochs):
+                # Log epoch start to display
+                display.log(f"Starting epoch {epoch + 1}/{train_config.epochs}")
 
-            # Train
-            train_loss, train_from_acc, train_to_acc, global_step = train_one_epoch(
-                model=model,
-                dataloader=train_loader,
-                loss_fn=loss_fn,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                scaler=scaler,
-                device=device,
-                epoch=epoch + 1,
-                global_step=global_step,
-                gradient_accumulation_steps=train_config.gradient_accumulation_steps,
-                max_grad_norm=train_config.max_grad_norm,
-                use_amp=train_config.use_amp,
-                use_legal_masks=use_legal_masks and is_legal_smoothing,
-                log_every_n_steps=log_every_n_steps,
-            )
-            logger.info(
-                f"Epoch {epoch + 1} Train | Loss: {train_loss:.4f} | "
-                f"From Acc: {100 * train_from_acc:.2f}% | "
-                f"To Acc: {100 * train_to_acc:.2f}%"
-            )
+                # Train
+                train_metrics, global_step = train_one_epoch(
+                    model=model,
+                    dataloader=train_loader,
+                    loss_fn=loss_fn,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler,
+                    device=device,
+                    epoch=epoch + 1,
+                    global_step=global_step,
+                    display=display,
+                    aim_run=aim_run,
+                    gradient_accumulation_steps=train_config.gradient_accumulation_steps,
+                    max_grad_norm=train_config.max_grad_norm,
+                    use_amp=train_config.use_amp,
+                    use_legal_masks=use_legal_masks and is_legal_smoothing,
+                )
+                train_summary = (
+                    f"Epoch {epoch + 1} Train | Loss: {train_metrics['loss']:.4f} | "
+                    f"Top-1: {100 * train_metrics['top1_acc']:.2f}% | "
+                    f"Top-3: {100 * train_metrics['top3_acc']:.2f}% | "
+                    f"Top-5: {100 * train_metrics['top5_acc']:.2f}%"
+                )
+                display.log(train_summary)
 
-            # Validate every epoch
-            val_loss, val_from_acc, val_to_acc = validate(
-                model=model,
-                dataloader=val_loader,
-                loss_fn=loss_fn,
-                device=device,
-                epoch=epoch + 1,
-                use_amp=train_config.use_amp,
-                use_legal_masks=use_legal_masks and is_legal_smoothing,
-            )
-            logger.info(
-                f"Epoch {epoch + 1} Val | Loss: {val_loss:.4f} | "
-                f"From Acc: {100 * val_from_acc:.2f}% | "
-                f"To Acc: {100 * val_to_acc:.2f}%"
-            )
+                # Validate every epoch
+                val_metrics = validate(
+                    model=model,
+                    dataloader=val_loader,
+                    loss_fn=loss_fn,
+                    device=device,
+                    epoch=epoch + 1,
+                    global_step=global_step,
+                    display=display,
+                    aim_run=aim_run,
+                    use_amp=train_config.use_amp,
+                    use_legal_masks=use_legal_masks and is_legal_smoothing,
+                )
+                val_loss = val_metrics["loss"]
+                val_summary = (
+                    f"Epoch {epoch + 1} Val | Loss: {val_loss:.4f} | "
+                    f"Top-1: {100 * val_metrics['top1_acc']:.2f}% | "
+                    f"Top-3: {100 * val_metrics['top3_acc']:.2f}% | "
+                    f"Top-5: {100 * val_metrics['top5_acc']:.2f}%"
+                )
+                display.log(val_summary)
 
-            # Save best model
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_path = checkpoint_folder / "best.pt"
+                # Record validation metrics in display
+                display.record_validation(
+                    epoch=epoch + 1,
+                    loss=val_loss,
+                    top1_acc=val_metrics["top1_acc"],
+                    top3_acc=val_metrics["top3_acc"],
+                    top5_acc=val_metrics["top5_acc"],
+                )
+
+                # Save best model
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_path = checkpoint_folder / "best.pt"
+                    save_checkpoint(
+                        best_path,
+                        model,
+                        optimizer,
+                        scheduler,
+                        scaler,
+                        epoch,
+                        global_step,
+                        best_val_loss,
+                    )
+                    display.log(f"New best model saved (val_loss={val_loss:.4f})")
+                    aim_run.track(
+                        AimText(
+                            f"best.pt (epoch={epoch + 1}, val_loss={val_loss:.4f})"
+                        ),
+                        name="checkpoints",
+                        step=global_step,
+                        epoch=epoch + 1,
+                    )
+
+                # Save latest checkpoint (overwritten every epoch for resumption)
+                latest_path = checkpoint_folder / "latest.pt"
                 save_checkpoint(
-                    best_path,
+                    latest_path,
                     model,
                     optimizer,
                     scheduler,
@@ -605,25 +995,20 @@ def train_model(
                     global_step,
                     best_val_loss,
                 )
-                logger.info(f"New best model saved (val_loss={val_loss:.4f})")
+                aim_run.track(
+                    AimText(f"latest.pt (epoch={epoch + 1}, step={global_step})"),
+                    name="checkpoints",
+                    step=global_step,
+                    epoch=epoch + 1,
+                )
 
-            # Save latest checkpoint (overwritten every epoch for resumption)
-            latest_path = checkpoint_folder / "latest.pt"
-            save_checkpoint(
-                latest_path,
-                model,
-                optimizer,
-                scheduler,
-                scaler,
-                epoch,
-                global_step,
-                best_val_loss,
-            )
+            display.log("Training complete!")
 
         logger.info("Training complete!")
 
     finally:
-        # Clean up datasets even if an exception occurs
+        # Clean up resources even if an exception occurs
+        aim_run.close()
         train_dataset.close()
         val_dataset.close()
 
@@ -640,10 +1025,23 @@ if __name__ == "__main__":
         "--checkpoint-folder",
         type=str,
         default=None,
-        help="Override checkpoint folder (default: from config or env var)",
+        help="Base checkpoint directory (default: from config or env var). "
+        "Each run creates a subfolder named after the run.",
+    )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        metavar="RUN_NAME",
+        help="Resume a previous run by name (e.g., 'Vole_v1.0_20251214_160305'). "
+        "Loads checkpoints and continues logging to the same Aim run.",
     )
     args = parser.parse_args()
 
     # Import config and train
     config = import_config(args.config_name)
-    train_model(config=config, checkpoint_folder=args.checkpoint_folder)
+    train_model(
+        config=config,
+        checkpoint_folder=args.checkpoint_folder,
+        resume_run=args.resume,
+    )

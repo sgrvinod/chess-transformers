@@ -15,14 +15,14 @@ Notes:
 """
 
 import math
-from typing import Dict, Tuple
-
 import torch
 import torch.nn as nn
 
+from typing import Dict, Tuple
+
 from chess_transformers.models.modules import BoardEncoder
-from chess_transformers.models.configs.base import ModelConfig
 from chess_transformers.utilities.loggers import setup_logger
+from chess_transformers.models.configs.base import ModelConfig
 
 # Logger
 logger = setup_logger(__file__)

@@ -40,8 +40,8 @@ MODEL_VERSION = "1.0"
 
 # Paths for logs and checkpoints
 _project_root = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
-_log_dir = _project_root / "logs" / f"{MODEL_NAME}_{MODEL_VERSION}"
-_checkpoint_dir = _project_root / "checkpoints" / f"{MODEL_NAME}_{MODEL_VERSION}"
+_log_dir = _project_root / "logs"
+_checkpoint_dir = _project_root / "checkpoints"
 
 
 config = ModelConfig(
@@ -79,7 +79,7 @@ config = ModelConfig(
         lmdb_filepath="${CT_DATA_FOLDER}/LE25ct/LE25ct.lmdb",
     ),
     train_config=TrainConfig(
-        epochs=10,
+        epochs=11,
         gradient_accumulation_steps=4,
         optimizer=torch.optim.AdamW,
         optimizer_args={"lr": 3e-4, "weight_decay": 0.01},
@@ -89,7 +89,6 @@ config = ModelConfig(
         use_amp=True,
         loss_fn=DualLabelSmoothedCE,
         loss_fn_args={"eps": 0.1},
-        epochs_per_log=0.01,
         log_dir=_log_dir,
         checkpoint_dir=_checkpoint_dir,
     ),

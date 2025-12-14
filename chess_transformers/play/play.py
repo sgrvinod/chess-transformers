@@ -117,9 +117,11 @@ def model_v_engine(
                         black_player_name=black_player_name,
                         event=event,
                         round=str(i + 1),
-                        time_control="{}+{}".format(clock.base_time, clock.increment)
-                        if clock is not None
-                        else "-",
+                        time_control=(
+                            "{}+{}".format(clock.base_time, clock.increment)
+                            if clock is not None
+                            else "-"
+                        ),
                         result="0-1",
                         termination="time forfeit",
                     )
@@ -196,12 +198,14 @@ def model_v_engine(
                 black_player_name=black_player_name,
                 event=event,
                 round=str(i + 1),
-                time_control="{}+{}".format(clock.base_time, clock.increment)
-                if clock is not None
-                else "-",
-                result=board.result()
-                if not time_forfeit_result
-                else time_forfeit_result,
+                time_control=(
+                    "{}+{}".format(clock.base_time, clock.increment)
+                    if clock is not None
+                    else "-"
+                ),
+                result=(
+                    board.result() if not time_forfeit_result else time_forfeit_result
+                ),
                 termination="normal" if not time_forfeit_result else "time forfeit",
             )
         )
@@ -411,11 +415,11 @@ def human_v_model(
                             black_player_name=black_player_name,
                             event=event,
                             round=str(i + 1),
-                            time_control="{}+{}".format(
-                                clock.base_time, clock.increment
-                            )
-                            if clock is not None
-                            else "-",
+                            time_control=(
+                                "{}+{}".format(clock.base_time, clock.increment)
+                                if clock is not None
+                                else "-"
+                            ),
                             result="0-1",
                             termination="normal",
                         )
@@ -436,9 +440,11 @@ def human_v_model(
                         black_player_name=black_player_name,
                         event=event,
                         round=str(i + 1),
-                        time_control="{}+{}".format(clock.base_time, clock.increment)
-                        if clock is not None
-                        else "-",
+                        time_control=(
+                            "{}+{}".format(clock.base_time, clock.increment)
+                            if clock is not None
+                            else "-"
+                        ),
                         result="0-1",
                         termination="time forfeit",
                     )
@@ -529,9 +535,11 @@ def human_v_model(
                 black_player_name=black_player_name,
                 event=event,
                 round=str(i + 1),
-                time_control="{}+{}".format(clock.base_time, clock.increment)
-                if clock is not None
-                else "-",
+                time_control=(
+                    "{}+{}".format(clock.base_time, clock.increment)
+                    if clock is not None
+                    else "-"
+                ),
                 result=board.result() if not declared_result else declared_result,
                 termination="normal" if not time_forfeit else "time forfeit",
             )

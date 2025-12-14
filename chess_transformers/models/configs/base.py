@@ -206,9 +206,6 @@ class TrainConfig(BaseModel):
     loss_fn_args: Dict[str, Any] = Field(
         default_factory=dict, description="Arguments to pass to the loss function"
     )
-    epochs_per_log: float = Field(
-        0.1, description="Fraction of an epoch between logging intervals", gt=0
-    )
     log_dir: Optional[pathlib.Path] = Field(
         None, description="Directory path for saving training logs"
     )

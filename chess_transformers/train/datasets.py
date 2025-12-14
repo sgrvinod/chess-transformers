@@ -21,11 +21,11 @@ Notes:
 
 import struct
 import contextlib
-
 import numpy as np
+
 from pathlib import Path
 from torch.utils.data import Dataset
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Dict, Literal, Optional, Union
 
 from chess_transformers.utilities.lmdb import ChessLMDB
 from chess_transformers.utilities.loggers import setup_logger
@@ -94,12 +94,12 @@ class ChessDatasetFT(Dataset):
         self.split = split
 
         # Lazy initialization for fork-safety
-        self._db: Optional[ChessLMDB] = None
-        self._metadata: Optional[Dict[str, Any]] = None
-        self._has_masks: Optional[bool] = None
-        self._first_index: Optional[int] = None
-        self._length: Optional[int] = None
-        self._struct: Optional[struct.Struct] = None
+        self._db = None
+        self._metadata = None
+        self._has_masks = None
+        self._first_index = None
+        self._length = None
+        self._struct = None
 
     def _open_db(self) -> None:
         """Open the LMDB database and load metadata.
