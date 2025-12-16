@@ -109,6 +109,21 @@ class DataLoaderConfig(BaseModel):
         None, description="Path to the LMDB database file for training data"
     )
 
+    # Dataset metadata fields (for experiment tracking, not used in training)
+    source_name: Optional[str] = Field(
+        None, description="Name of the underlying data source (e.g., 'LE25ct')"
+    )
+    n_rows: Optional[int] = Field(
+        None, description="Total number of samples in the dataset", ge=0
+    )
+    val_split_fraction: Optional[float] = Field(
+        None, description="Fraction of data used for training (e.g., 0.95)", ge=0, le=1
+    )
+    legal_mask_mode: Optional[str] = Field(
+        None,
+        description="Legal mask mode used in training loss, or None if not used",
+    )
+
     def to_dataloader_kwargs(self) -> dict:
         """Convert config to kwargs for torch.utils.data.DataLoader.
 

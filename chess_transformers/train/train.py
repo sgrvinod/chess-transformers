@@ -228,6 +228,50 @@ def _format_hparam_value(value: Any) -> str:
     return str(value)
 
 
+def _get_data_size_bucket(n_rows: Optional[int]) -> str:
+    """Get the data size bucket tag based on number of rows.
+
+    Args:
+        n_rows: Number of samples in the dataset, or None if unknown.
+
+    Returns:
+        A bucket tag string: "data_tiny", "data_small", "data_medium",
+        "data_large", "data_xlarge", or "data_unknown".
+    """
+    if n_rows is None:
+        return "data_unknown"
+    if n_rows < 100_000:
+        return "data_tiny"
+    if n_rows < 1_000_000:
+        return "data_small"
+    if n_rows < 10_000_000:
+        return "data_medium"
+    if n_rows < 100_000_000:
+        return "data_large"
+    return "data_xlarge"
+
+
+def _get_model_size_bucket(n_params: int) -> str:
+    """Get the model size bucket tag based on number of parameters.
+
+    Args:
+        n_params: Number of trainable parameters in the model.
+
+    Returns:
+        A bucket tag string: "model_tiny", "model_small", "model_medium",
+        "model_large", or "model_xlarge".
+    """
+    if n_params < 1_000_000:
+        return "model_tiny"
+    if n_params < 10_000_000:
+        return "model_small"
+    if n_params < 100_000_000:
+        return "model_medium"
+    if n_params < 1_000_000_000:
+        return "model_large"
+    return "model_xlarge"
+
+
 def train_one_epoch(
     model: nn.Module,
     dataloader: DataLoader,
@@ -775,6 +819,11 @@ def train_model(
         "prefetch_factor": dataloader_config.prefetch_factor,
         "persistent_workers": dataloader_config.persistent_workers,
         "lmdb_filepath": str(lmdb_path),
+        # Dataset metadata
+        "source_name": dataloader_config.source_name,
+        "n_rows": dataloader_config.n_rows,
+        "val_split_fraction": dataloader_config.val_split_fraction,
+        "legal_mask_mode": dataloader_config.legal_mask_mode,
         # Computed values
         "n_params": n_params,
     }
@@ -885,6 +934,24 @@ def train_model(
         aim_run.name = run_name
         aim_run.description = description
         aim_run["hparams"] = hparams
+
+        # Add tags for filtering runs
+        aim_run.add_tag(config.model_type.__name__)  # Model architecture
+        aim_run.add_tag(dataloader_config.dataset.__name__)  # PyTorch dataset class
+        if dataloader_config.source_name:
+            aim_run.add_tag(dataloader_config.source_name)  # Data source name
+        aim_run.add_tag(train_config.loss_fn.__name__)  # Loss function
+        aim_run.add_tag(train_config.lr_schedule.__name__)  # LR scheduler
+        aim_run.add_tag(train_config.optimizer.__name__)  # Optimizer
+        if dataloader_config.legal_mask_mode:
+            aim_run.add_tag(f"mask_{dataloader_config.legal_mask_mode}")
+        aim_run.add_tag("amp" if train_config.use_amp else "fp32")
+        aim_run.add_tag("compiled" if not config.disable_compilation else "uncompiled")
+        if not config.disable_compilation:
+            aim_run.add_tag(f"compilation_mode_{config.compilation_mode}")
+        aim_run.add_tag(_get_data_size_bucket(dataloader_config.n_rows))
+        aim_run.add_tag(_get_model_size_bucket(n_params))
+
         logger.info(f"Initialized new Aim run: {aim_run.name} ({aim_run.hash})")
         logger.info("Starting fresh training run")
 

@@ -77,6 +77,10 @@ config = ModelConfig(
         drop_last=True,
         persistent_workers=True,
         lmdb_filepath="${CT_DATA_FOLDER}/LE25ct/LE25ct.lmdb",
+        source_name="LE25ct",
+        n_rows=21_102_878,
+        val_split_fraction=0.95,
+        legal_mask_mode=None,
     ),
     train_config=TrainConfig(
         epochs=11,
