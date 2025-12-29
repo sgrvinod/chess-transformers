@@ -62,7 +62,7 @@ def save_checkpoint(
     scaler: GradScaler,
     epoch: int,
     global_step: int,
-    best_val_loss: float,
+    best_val_top1_acc: float,
 ) -> None:
     """Save a training checkpoint.
 
@@ -78,8 +78,11 @@ def save_checkpoint(
         scaler: The gradient scaler state (for AMP).
         epoch: Current epoch number.
         global_step: Current global training step.
-        best_val_loss: Best validation loss seen so far.
+        best_val_top1_acc: Best validation top-1 accuracy seen so far.
     """
+    # Create checkpoint folder if it doesn't exist
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
@@ -87,7 +90,7 @@ def save_checkpoint(
         "scaler_state_dict": scaler.state_dict(),
         "epoch": epoch,
         "global_step": global_step,
-        "best_val_loss": best_val_loss,
+        "best_val_top1_acc": best_val_top1_acc,
     }
 
     torch.save(checkpoint, path)
@@ -112,7 +115,7 @@ def load_checkpoint(
         device: Device to map tensors to.
 
     Returns:
-        Tuple of (epoch, global_step, best_val_loss).
+        Tuple of (epoch, global_step, best_val_top1_acc).
     """
     checkpoint = torch.load(path, map_location=device, weights_only=False)  # noqa: S614
 
@@ -125,10 +128,11 @@ def load_checkpoint(
 
     epoch = checkpoint["epoch"]
     global_step = checkpoint["global_step"]
-    best_val_loss = checkpoint["best_val_loss"]
+    # Support both old (best_val_loss) and new (best_val_top1_acc) checkpoint formats
+    best_val_top1_acc = checkpoint.get("best_val_top1_acc", 0.0)
 
     logger.info(f"Loaded checkpoint from {path} (epoch {epoch}, step {global_step})")
-    return epoch, global_step, best_val_loss
+    return epoch, global_step, best_val_top1_acc
 
 
 def get_hparam_diff(
@@ -284,6 +288,7 @@ def train_one_epoch(
     global_step: int,
     display: TrainingDisplay,
     aim_run: AimRun,
+    effective_batch_size: int,
     gradient_accumulation_steps: int = 1,
     max_grad_norm: float = 1.0,
     use_amp: bool = True,
@@ -303,6 +308,9 @@ def train_one_epoch(
         global_step: Current global step count.
         display: TrainingDisplay for progress visualization.
         aim_run: Aim Run instance for experiment tracking.
+        effective_batch_size: Number of samples per optimizer step
+            (batch_size * gradient_accumulation_steps). Used to compute
+            samples_seen for Aim logging x-axis.
         gradient_accumulation_steps: Number of steps to accumulate gradients.
         max_grad_norm: Maximum gradient norm for clipping.
         use_amp: Whether to use automatic mixed precision.
@@ -429,6 +437,8 @@ def train_one_epoch(
             display.log(log_msg)
 
             # Track step-level metrics to Aim (aggregated across accumulation batches)
+            # Use samples_seen as the x-axis for fair comparison across different batch sizes
+            samples_seen = global_step * effective_batch_size
             aim_run.track(
                 {
                     "loss": step_loss,
@@ -437,12 +447,13 @@ def train_one_epoch(
                     "top5_acc": step_top5_acc,
                     "lr": current_lr,
                     "grad_norm": grad_norm.item(),
-                    "amp_scale": scaler.get_scale(),
                     "batch_load_time_ms": step_batch_load_time_sum * 1000,
                     "step_time_ms": step_compute_time_sum * 1000,
+                    "epoch": epoch,
+                    "step": global_step,
                 },
                 context={"subset": "train"},
-                step=global_step,
+                step=samples_seen,
                 epoch=epoch,
             )
 
@@ -483,6 +494,7 @@ def validate(
     global_step: int,
     display: TrainingDisplay,
     aim_run: AimRun,
+    effective_batch_size: int,
     use_amp: bool = True,
     use_legal_masks: bool = False,
 ) -> Dict[str, float]:
@@ -497,6 +509,8 @@ def validate(
         global_step: Current global training step (for Aim logging).
         display: TrainingDisplay for progress visualization.
         aim_run: Aim Run instance for experiment tracking.
+        effective_batch_size: Number of samples per training optimizer step.
+            Used to compute samples_seen for Aim logging x-axis.
         use_amp: Whether to use automatic mixed precision.
         use_legal_masks: Whether to pass legal masks to the loss function.
 
@@ -575,16 +589,20 @@ def validate(
     display.end_epoch()
 
     # Track validation metrics to Aim (once per epoch)
+    # Use samples_seen as the x-axis for fair comparison across different batch sizes
     final_metrics = metrics.get_metrics()
+    samples_seen = global_step * effective_batch_size
     aim_run.track(
         {
             "loss": final_metrics["loss"],
             "top1_acc": final_metrics["top1_acc"],
             "top3_acc": final_metrics["top3_acc"],
             "top5_acc": final_metrics["top5_acc"],
+            "epoch": epoch,
+            "step": global_step,
         },
         context={"subset": "val"},
-        step=global_step,
+        step=samples_seen,
         epoch=epoch,
     )
 
@@ -742,13 +760,17 @@ def train_model(
         f"with args: {train_config.optimizer_args}"
     )
 
-    # Compute total steps
+    # Compute total steps and effective batch size
     steps_per_epoch = len(train_loader) // train_config.gradient_accumulation_steps
     total_steps = steps_per_epoch * train_config.epochs
+    effective_batch_size = (
+        dataloader_config.batch_size * train_config.gradient_accumulation_steps
+    )
     logger.info(
         f"Training for {train_config.epochs} epochs, "
         f"{steps_per_epoch} steps/epoch, {total_steps} total steps"
     )
+    logger.info(f"Effective batch size: {effective_batch_size:,}")
 
     # Create LR scheduler - always use LambdaLR with the lr_schedule factory from config
     lr_lambda = train_config.lr_schedule(
@@ -826,12 +848,13 @@ def train_model(
         "legal_mask_mode": dataloader_config.legal_mask_mode,
         # Computed values
         "n_params": n_params,
+        "effective_batch_size": effective_batch_size,
     }
 
     # Initialize training state
     start_epoch = 0
     global_step = 0
-    best_val_loss = float("inf")
+    best_val_top1_acc = 0.0
 
     # Determine run name and set up checkpoint folder
     if resume_run is not None:
@@ -893,7 +916,7 @@ def train_model(
 
         # Load the checkpoint
         logger.info(f"Resuming from checkpoint: {latest_checkpoint}")
-        start_epoch, global_step, best_val_loss = load_checkpoint(
+        start_epoch, global_step, best_val_top1_acc = load_checkpoint(
             latest_checkpoint, model, optimizer, scheduler, scaler, device
         )
         start_epoch += 1  # Start from next epoch
@@ -917,7 +940,7 @@ def train_model(
             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
         checkpoint_folder = base_checkpoint_dir / run_name
-        checkpoint_folder.mkdir(parents=True, exist_ok=True)
+        # Note: checkpoint folder is created on first checkpoint save
 
         # Auto-generate description by comparing to previous run
         description = get_hparam_diff(aim_repo_path, experiment_name, hparams)
@@ -952,6 +975,17 @@ def train_model(
         aim_run.add_tag(_get_data_size_bucket(dataloader_config.n_rows))
         aim_run.add_tag(_get_model_size_bucket(n_params))
 
+        # Log hardware information
+        hardware_info = {
+            "gpu_name": torch.cuda.get_device_name(0),
+            "gpu_count": torch.cuda.device_count(),
+            "gpu_memory_gb": torch.cuda.get_device_properties(0).total_memory / 1e9,
+            "cuda_version": torch.version.cuda,
+            "pytorch_version": torch.__version__,
+        }
+        aim_run["hardware"] = hardware_info
+        aim_run.add_tag(torch.cuda.get_device_name(0).replace(" ", "_"))
+
         logger.info(f"Initialized new Aim run: {aim_run.name} ({aim_run.hash})")
         logger.info("Starting fresh training run")
 
@@ -982,6 +1016,7 @@ def train_model(
                     global_step=global_step,
                     display=display,
                     aim_run=aim_run,
+                    effective_batch_size=effective_batch_size,
                     gradient_accumulation_steps=train_config.gradient_accumulation_steps,
                     max_grad_norm=train_config.max_grad_norm,
                     use_amp=train_config.use_amp,
@@ -1005,6 +1040,7 @@ def train_model(
                     global_step=global_step,
                     display=display,
                     aim_run=aim_run,
+                    effective_batch_size=effective_batch_size,
                     use_amp=train_config.use_amp,
                     use_legal_masks=use_legal_masks and is_legal_smoothing,
                 )
@@ -1026,9 +1062,10 @@ def train_model(
                     top5_acc=val_metrics["top5_acc"],
                 )
 
-                # Save best model
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
+                # Save best model (based on highest top-1 accuracy)
+                val_top1_acc = val_metrics["top1_acc"]
+                if val_top1_acc > best_val_top1_acc:
+                    best_val_top1_acc = val_top1_acc
                     best_path = checkpoint_folder / "best.pt"
                     save_checkpoint(
                         best_path,
@@ -1038,12 +1075,15 @@ def train_model(
                         scaler,
                         epoch,
                         global_step,
-                        best_val_loss,
+                        best_val_top1_acc,
                     )
-                    display.log(f"New best model saved (val_loss={val_loss:.4f})")
+                    display.log(
+                        f"New best model saved (val_top1_acc={100 * val_top1_acc:.2f}%)"
+                    )
                     aim_run.track(
                         AimText(
-                            f"best.pt (epoch={epoch + 1}, val_loss={val_loss:.4f})"
+                            f"best.pt (epoch={epoch + 1}, "
+                            f"val_top1_acc={100 * val_top1_acc:.2f}%)"
                         ),
                         name="checkpoints",
                         step=global_step,
@@ -1060,7 +1100,7 @@ def train_model(
                     scaler,
                     epoch,
                     global_step,
-                    best_val_loss,
+                    best_val_top1_acc,
                 )
                 aim_run.track(
                     AimText(f"latest.pt (epoch={epoch + 1}, step={global_step})"),

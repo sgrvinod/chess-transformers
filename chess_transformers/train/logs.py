@@ -711,6 +711,10 @@ class TrainingDisplay:
         # Validation history (stored per epoch)
         self.val_history = []
 
+        # Best validation metrics (based on highest top-1 accuracy)
+        self.best_val_epoch = None
+        self.best_val_metrics = None
+
         # Log window
         self.log_lines = deque(maxlen=log_window_size)
 
@@ -915,15 +919,19 @@ class TrainingDisplay:
         return row
 
     def _build_header_row(
-        self, label: str = "History", sparkline_width: int = None
+        self,
+        value_label: str = "Value",
+        history_label: str = "History",
+        sparkline_width: int = None,
     ) -> Text:
         """Build a header row for the metrics table.
 
-        Creates a header row with "Metric", "Value", and "History" columns
+        Creates a header row with "Metric", value, and history columns
         that align with the metric data rows.
 
         Args:
-            label: Label for the history column.
+            value_label: Label for the value column.
+            history_label: Label for the history column.
             sparkline_width: Width for the History column. If None, uses a default.
 
         Returns:
@@ -941,9 +949,9 @@ class TrainingDisplay:
         # Build header text
         header = Text()
         header.append("Metric".ljust(label_width), style="bold white")
-        header.append("Value".rjust(value_width), style="bold white")
+        header.append(value_label.rjust(value_width), style="bold white")
         header.append("    ")  # Spacer (same as metric rows)
-        header.append(label.center(sparkline_width), style="bold white")
+        header.append(history_label.center(sparkline_width), style="bold white")
 
         return header
 
@@ -1002,11 +1010,13 @@ class TrainingDisplay:
         # Header row
         # Determine the number of visible data points
         n_visible = min(len(self.loss_history), sparkline_width)
-        header_label = f"History (Last {n_visible} Steps)"
+        history_label = f"History (Last {n_visible} Steps)"
         elements.append(
             Align.center(
                 self._build_header_row(
-                    label=header_label, sparkline_width=sparkline_width
+                    value_label="Value",
+                    history_label=history_label,
+                    sparkline_width=sparkline_width,
                 )
             )
         )
@@ -1090,12 +1100,15 @@ class TrainingDisplay:
                 expand=True,
             )
 
-        # Extract histories
+        # Extract histories for sparklines
         val_losses = [e["loss"] for e in self.val_history]
         val_top1 = [e["top1_acc"] for e in self.val_history]
         val_top3 = [e["top3_acc"] for e in self.val_history]
         val_top5 = [e["top5_acc"] for e in self.val_history]
-        latest = self.val_history[-1]
+
+        # Use best metrics (from epoch with highest top-1 acc) for display values
+        best = self.best_val_metrics if self.best_val_metrics else self.val_history[-1]
+        best_epoch = self.best_val_epoch if self.best_val_epoch else best["epoch"]
 
         elements = []
 
@@ -1107,44 +1120,46 @@ class TrainingDisplay:
         value_width = 10
         sparkline_width = max(20, self.sparkline_width - label_width - value_width - 8)
 
-        # Header row
-        # Determine the number of visible data points
+        # Header row with epoch number in value column
         n_visible = min(len(self.val_history), sparkline_width)
-        header_label = f"History (Last {n_visible} Epochs)"
+        value_label = f"Best (Ep. {best_epoch})"
+        history_label = f"History (Last {n_visible} Epochs)"
         elements.append(
             Align.center(
                 self._build_header_row(
-                    label=header_label, sparkline_width=sparkline_width
+                    value_label=value_label,
+                    history_label=history_label,
+                    sparkline_width=sparkline_width,
                 )
             )
         )
         elements.append(Text(""))  # Blank line after header
 
-        # Build metric rows
+        # Build metric rows using best values
         loss_row = self._build_metric_row(
             label="Loss",
-            value=f"{latest['loss']:.4f}",
+            value=f"{best['loss']:.4f}",
             history=val_losses,
             metric_type="loss",
             sparkline_width=sparkline_width,
         )
         top1_row = self._build_metric_row(
             label="Top-1 Acc",
-            value=f"{100 * latest['top1_acc']:.2f}%",
+            value=f"{100 * best['top1_acc']:.2f}%",
             history=val_top1,
             metric_type="acc",
             sparkline_width=sparkline_width,
         )
         top3_row = self._build_metric_row(
             label="Top-3 Acc",
-            value=f"{100 * latest['top3_acc']:.2f}%",
+            value=f"{100 * best['top3_acc']:.2f}%",
             history=val_top3,
             metric_type="acc",
             sparkline_width=sparkline_width,
         )
         top5_row = self._build_metric_row(
             label="Top-5 Acc",
-            value=f"{100 * latest['top5_acc']:.2f}%",
+            value=f"{100 * best['top5_acc']:.2f}%",
             history=val_top5,
             metric_type="acc",
             sparkline_width=sparkline_width,
@@ -1272,15 +1287,23 @@ class TrainingDisplay:
             top3_acc: Top-3 accuracy (0.0 to 1.0).
             top5_acc: Top-5 accuracy (0.0 to 1.0).
         """
-        self.val_history.append(
-            {
-                "epoch": epoch,
-                "loss": loss,
-                "top1_acc": top1_acc,
-                "top3_acc": top3_acc,
-                "top5_acc": top5_acc,
-            }
-        )
+        metrics = {
+            "epoch": epoch,
+            "loss": loss,
+            "top1_acc": top1_acc,
+            "top3_acc": top3_acc,
+            "top5_acc": top5_acc,
+        }
+        self.val_history.append(metrics)
+
+        # Track best epoch (based on highest top-1 accuracy)
+        if (
+            self.best_val_metrics is None
+            or top1_acc > self.best_val_metrics["top1_acc"]
+        ):
+            self.best_val_epoch = epoch
+            self.best_val_metrics = metrics
+
         if self.live:
             self.live.update(self._build_display())
 
