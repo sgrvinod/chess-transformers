@@ -981,7 +981,7 @@ def train_model(
             "gpu_count": torch.cuda.device_count(),
             "gpu_memory_gb": torch.cuda.get_device_properties(0).total_memory / 1e9,
             "cuda_version": torch.version.cuda,
-            "pytorch_version": torch.__version__,
+            "pytorch_version": str(torch.__version__),
         }
         aim_run["hardware"] = hardware_info
         aim_run.add_tag(torch.cuda.get_device_name(0).replace(" ", "_"))
