@@ -89,8 +89,11 @@ class DataConfig(BaseModel):
         """Generate the LMDB output filename from the configuration name.
 
         Returns:
-            The LMDB filename in the format "{name}.lmdb".
+            The LMDB filename. If legal_mask_mode is set, returns
+            "{name}_{mode}.lmdb", otherwise returns "{name}.lmdb".
         """
+        if self.legal_mask_mode:
+            return f"{self.name}_{self.legal_mask_mode}.lmdb"
         return f"{self.name}.lmdb"
 
     @model_validator(mode="after")
