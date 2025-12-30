@@ -83,10 +83,10 @@ config = ModelConfig(
         legal_mask_mode=None,
     ),
     train_config=TrainConfig(
-        epochs=10,
+        epochs=15,
         gradient_accumulation_steps=1,
         optimizer=torch.optim.AdamW,
-        optimizer_args={"lr": 6e-4, "weight_decay": 0.01},
+        optimizer_args={"lr": 1e-3, "weight_decay": 0.01},
         lr_schedule=get_warmup_cosine_schedule,
         lr_schedule_args={"warmup_steps": 4000},
         max_grad_norm=1.0,
