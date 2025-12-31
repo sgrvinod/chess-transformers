@@ -35,9 +35,9 @@ logger = setup_logger(__file__)
 
 # Struct formats for unpacking LMDB records
 # Base: 64 bytes (board) + 7 bytes (turn, 4x castling, from, to) = 71 bytes
-# With masks: + 16 bytes (two 64-bit masks) = 87 bytes
+# With masks: + 16 bytes (two signed 64-bit masks) = 87 bytes
 _STRUCT_BASE = struct.Struct("64B B B B B B B B")
-_STRUCT_WITH_MASKS = struct.Struct("64B B B B B B B B Q Q")
+_STRUCT_WITH_MASKS = struct.Struct("64B B B B B B B B q q")
 
 
 class ChessDatasetFT(Dataset):

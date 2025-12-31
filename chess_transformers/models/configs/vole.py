@@ -29,7 +29,7 @@ from chess_transformers.models.configs.base import (
     ModelConfig,
     TrainConfig,
 )
-from chess_transformers.models.criteria import DualLabelSmoothedCE
+from chess_transformers.models.criteria import LegalMoveSmoothing
 from chess_transformers.models.models import ChessTransformerEncoderFT
 from chess_transformers.train.datasets import ChessDatasetFT
 from chess_transformers.train.schedules import get_warmup_cosine_schedule
@@ -76,11 +76,11 @@ config = ModelConfig(
         shuffle=True,
         drop_last=True,
         persistent_workers=True,
-        lmdb_filepath="${CT_DATA_FOLDER}/LE25ct/LE25ct.lmdb",
+        lmdb_filepath="${CT_DATA_FOLDER}/LE25ct/LE25ct_conditional.lmdb",
         source_name="LE25ct",
         n_rows=21_102_878,
         val_split_fraction=0.95,
-        legal_mask_mode=None,
+        legal_mask_mode="conditional",
     ),
     train_config=TrainConfig(
         epochs=15,
@@ -91,7 +91,7 @@ config = ModelConfig(
         lr_schedule_args={"warmup_steps": 4000},
         max_grad_norm=1.0,
         use_amp=True,
-        loss_fn=DualLabelSmoothedCE,
+        loss_fn=LegalMoveSmoothing,
         loss_fn_args={"eps": 0.1},
         log_dir=_log_dir,
         checkpoint_dir=_checkpoint_dir,

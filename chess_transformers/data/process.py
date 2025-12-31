@@ -60,9 +60,14 @@ _RANK_INDEX = {r: i for i, r in enumerate(RANKS)}
 
 # Struct formats for record packing
 # Base: 64 bytes (board) + 7 bytes (turn, castling, from, to) = 71 bytes
-# With masks: + 16 bytes (two 64-bit masks) = 87 bytes
+# With masks: + 16 bytes (two signed 64-bit masks) = 87 bytes
+# Signed format (q) is required for compatibility with np.int64
 _RECORD_STRUCT_BASE = struct.Struct("64B B B B B B B B")
-_RECORD_STRUCT_WITH_MASKS = struct.Struct("64B B B B B B B B Q Q")
+_RECORD_STRUCT_WITH_MASKS = struct.Struct("64B B B B B B B B q q")
+
+# Constants for signed/unsigned conversion
+_SIGNED_64_MAX = (1 << 63) - 1
+_UNSIGNED_64_WRAP = 1 << 64
 
 
 def square_index(square: str) -> int:
@@ -247,6 +252,12 @@ def _compute_legal_masks(
         # - conditional: only destinations for the target from-square
         if mode == "disjoint" or (mode == "conditional" and our_from == from_sq):
             legal_to_mask |= 1 << our_to
+
+    # Convert to signed int64 for struct packing (bit pattern is preserved)
+    if legal_from_mask > _SIGNED_64_MAX:
+        legal_from_mask -= _UNSIGNED_64_WRAP
+    if legal_to_mask > _SIGNED_64_MAX:
+        legal_to_mask -= _UNSIGNED_64_WRAP
 
     return legal_from_mask, legal_to_mask
 

@@ -172,10 +172,20 @@ def get_hparam_diff(
         if not run_collections:
             return "First run in this experiment"
 
-        # Get the most recent run's hparams
-        # iter_runs() returns SingleRunSequenceCollection, access .run for the Run
-        latest_collection = max(run_collections, key=lambda rc: rc.run.created_at)
-        prev_hparams = dict(latest_collection.run.get("hparams", {}))
+        # Sort runs by creation time (descending)
+        run_collections.sort(key=lambda rc: rc.run.created_at, reverse=True)
+
+        # Iterate through runs to find the first one with non-empty hparams
+        prev_hparams = {}
+        for collection in run_collections:
+            run_hparams = dict(collection.run.get("hparams", {}))
+            if run_hparams:
+                prev_hparams = run_hparams
+                break
+        
+        # If no valid previous run found, treat as first run
+        if not prev_hparams:
+            return "First run in this experiment"
 
         # Find differences
         changes = []
